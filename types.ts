@@ -1,3 +1,4 @@
+
 export interface OrderItem {
   material: string;
   qty: number;
@@ -28,6 +29,10 @@ export interface PickingTask {
   distanceFromLast: number;
   status?: 'pending' | 'picked';
   timestamp?: string;
+  floorId: number; // New: Identifies the floor
+  startNewSection: boolean; // New: Indicates this task starts a new path segment (e.g., new floor)
+  isAdHoc?: boolean; // Was this picked freely outside the list?
+  requiresConfirmation?: boolean; // Does the supervisor/user need to explicitly accept this extra item?
 }
 
 export interface PickingSession {
