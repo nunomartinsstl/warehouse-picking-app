@@ -1,0 +1,16 @@
+{
+  "name": "Warehouse Picker Pro",
+  "short_name": "Picker",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#1a2332",
+  "theme_color": "#1a2332",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/6009/6009864.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
