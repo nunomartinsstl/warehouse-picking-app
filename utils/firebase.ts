@@ -1,8 +1,10 @@
+
 import { initializeApp } from 'firebase/app';
-import { getFirestore, collection, getDocs, doc, writeBatch, setDoc, deleteDoc, query, orderBy } from 'firebase/firestore';
-import { StockItem, OrderItem } from '../types';
+import { getFirestore, collection, getDocs, doc, writeBatch, setDoc, updateDoc, query, orderBy, where, deleteDoc } from 'firebase/firestore';
+import { StockItem, OrderItem, CloudOrder } from '../types';
 
 // --- PASTE YOUR FIREBASE CONFIG HERE ---
+// Ensure you have enabled Firestore Database in your Firebase Console
 const firebaseConfig = {
   apiKey: "AIzaSy...", // <--- REPLACE THIS
   authDomain: "warehousepicker.firebaseapp.com", // <--- REPLACE THIS
@@ -38,7 +40,6 @@ export const saveStockToCloud = async (stock: StockItem[]) => {
     if (!db) throw new Error("Database not initialized");
     
     // 1. Get all current stock docs to delete them (Full Replace strategy)
-    // In a real SAP integration, we would upsert, but for Excel replacement, full wipe is safer
     const stockCollection = collection(db, 'stock');
     const snapshot = await getDocs(stockCollection);
     
@@ -56,7 +57,7 @@ export const saveStockToCloud = async (stock: StockItem[]) => {
         const batch = writeBatch(db);
         batchItems.forEach(item => {
             // Create a unique ID based on material + bin
-            const id = `${item.material}_${item.bin}`.replace(/\//g, '-'); 
+            const id = `${item.material}_${item.bin}`.replace(/\//g, '-').replace(/\s+/g, ''); 
             const ref = doc(db, 'stock', id);
             batch.set(ref, item);
         });
@@ -67,42 +68,81 @@ export const saveStockToCloud = async (stock: StockItem[]) => {
 
 export const fetchStockFromCloud = async (): Promise<StockItem[]> => {
     if (!db) return [];
-    const snapshot = await getDocs(collection(db, 'stock'));
-    return snapshot.docs.map(d => d.data() as StockItem);
+    try {
+        const snapshot = await getDocs(collection(db, 'stock'));
+        return snapshot.docs.map(d => d.data() as StockItem);
+    } catch (e) {
+        console.error("Error fetching stock:", e);
+        return [];
+    }
 };
 
 // --- ORDER FUNCTIONS ---
 
-export const saveOrderToCloud = async (orderName: string, items: OrderItem[]) => {
+// Upload a new Order (from Excel)
+export const createCloudOrder = async (orderName: string, items: OrderItem[]) => {
     if (!db) throw new Error("Database not initialized");
-    const orderRef = doc(db, 'orders', orderName);
+    // Sanitize ID
+    const safeId = orderName.replace(/[^a-zA-Z0-9-_]/g, '_');
+    const orderRef = doc(db, 'orders', safeId);
     
-    await setDoc(orderRef, {
+    const newOrder: CloudOrder = {
+        id: safeId,
         name: orderName,
-        createdAt: new Date().toISOString(),
+        items: items,
         status: 'open',
-        items: items
-    });
+        createdAt: new Date().toISOString()
+    };
+
+    await setDoc(orderRef, newOrder);
 };
 
-export const fetchOpenOrdersFromCloud = async (): Promise<{name: string, date: string, items: OrderItem[]}[]> => {
+// Fetch only OPEN orders for the Picker
+export const fetchOpenOrdersFromCloud = async (): Promise<CloudOrder[]> => {
     if (!db) return [];
-    const q = query(collection(db, 'orders'), orderBy('createdAt', 'desc'));
-    const snapshot = await getDocs(q);
-    
-    return snapshot.docs.map(d => {
-        const data = d.data();
-        return {
-            name: data.name,
-            date: new Date(data.createdAt).toLocaleString('pt-PT'),
-            items: data.items as OrderItem[]
-        };
+    try {
+        const q = query(
+            collection(db, 'orders'), 
+            where('status', '==', 'open'),
+            orderBy('createdAt', 'desc')
+        );
+        const snapshot = await getDocs(q);
+        return snapshot.docs.map(d => d.data() as CloudOrder);
+    } catch (e) {
+        console.error("Error fetching open orders:", e);
+        return [];
+    }
+};
+
+// Fetch COMPLETED orders for the Manager
+export const fetchCompletedOrdersFromCloud = async (): Promise<CloudOrder[]> => {
+    if (!db) return [];
+    try {
+        const q = query(
+            collection(db, 'orders'), 
+            where('status', '==', 'completed'),
+            orderBy('completedAt', 'desc')
+        );
+        const snapshot = await getDocs(q);
+        return snapshot.docs.map(d => d.data() as CloudOrder);
+    } catch (e) {
+        console.error("Error fetching completed orders:", e);
+        return [];
+    }
+};
+
+// Move order to completed status
+export const markOrderComplete = async (orderId: string) => {
+    if (!db) return;
+    const orderRef = doc(db, 'orders', orderId);
+    await updateDoc(orderRef, {
+        status: 'completed',
+        completedAt: new Date().toISOString()
     });
 };
 
-export const markOrderComplete = async (orderName: string) => {
+// Delete an order (Manager utility)
+export const deleteOrder = async (orderId: string) => {
     if (!db) return;
-    // In a real app, we might move it to a 'history' collection. 
-    // Here we just delete it from open orders to keep it clean.
-    await deleteDoc(doc(db, 'orders', orderName));
+    await deleteDoc(doc(db, 'orders', orderId));
 };

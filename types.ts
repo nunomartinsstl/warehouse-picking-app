@@ -89,3 +89,16 @@ export interface ProcessedData {
   stock: StockItem[];
   orders: OrderItem[];
 }
+
+// --- CLOUD TYPES ---
+export type OrderStatus = 'open' | 'completed';
+
+export interface CloudOrder {
+    id: string; // Firestore ID
+    name: string;
+    items: OrderItem[];
+    status: OrderStatus;
+    createdAt: string; // ISO String
+    completedAt?: string; // ISO String
+    pickerId?: string;
+}
