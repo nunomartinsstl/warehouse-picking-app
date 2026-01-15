@@ -154,7 +154,8 @@ export const fetchCompletedOrdersFromCloud = async (): Promise<CloudOrder[]> => 
                 };
             }) as CloudOrder[];
 
-            return allOrders.filter(o => o.status === 'COMPLETED');
+            // Updated status check to 'FINISHED'
+            return allOrders.filter(o => o.status === 'FINISHED');
         }
         return [];
     } catch (e) {
@@ -204,13 +205,13 @@ export const deleteOrder = async (orderId: string) => {
     }
 };
 
-export const updateOrderStatus = async (orderId: string, newStatus: 'IN PROCESS' | 'COMPLETED') => {
+export const updateOrderStatus = async (orderId: string, newStatus: 'IN PROCESS' | 'FINISHED') => {
     const database = ensureDb();
     
     const updates: any = {};
     updates[`/nexus_orders/${orderId}/status`] = newStatus;
     
-    if (newStatus === 'COMPLETED') {
+    if (newStatus === 'FINISHED') {
         updates[`/nexus_orders/${orderId}/completedAt`] = new Date().toISOString();
     }
 
@@ -223,15 +224,20 @@ export const updateOrderStatus = async (orderId: string, newStatus: 'IN PROCESS'
     }
 };
 
-export const markOrderComplete = async (orderId: string, pickedItems: PickingTask[] = []) => {
+export const markOrderComplete = async (orderId: string, pickedItems: PickingTask[] = [], excelReportBase64: string = '') => {
     const database = ensureDb();
     const updates: any = {};
     
-    updates[`/nexus_orders/${orderId}/status`] = 'COMPLETED';
+    updates[`/nexus_orders/${orderId}/status`] = 'FINISHED';
     updates[`/nexus_orders/${orderId}/completedAt`] = new Date().toISOString();
     
     // Save picking results (upload to Cloud Order)
     updates[`/nexus_orders/${orderId}/pickedItems`] = pickedItems;
+    
+    // Save Excel report if provided
+    if (excelReportBase64) {
+        updates[`/nexus_orders/${orderId}/excelReport`] = excelReportBase64;
+    }
 
     try {
         await update(ref(database), updates);

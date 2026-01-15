@@ -91,7 +91,7 @@ export interface ProcessedData {
 }
 
 // --- CLOUD TYPES ---
-export type OrderStatus = 'OPEN' | 'IN PROCESS' | 'COMPLETED';
+export type OrderStatus = 'OPEN' | 'IN PROCESS' | 'FINISHED';
 
 export interface CloudOrder {
     id: string; // Firestore ID
@@ -102,4 +102,5 @@ export interface CloudOrder {
     completedAt?: string; // ISO String
     pickerId?: string;
     pickedItems?: PickingTask[]; // Store the results
+    excelReport?: string; // Base64 string of the generated Excel file
 }

@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Settings, Search, CheckCircle, X, Download, Plus, Trash2, Edit3, List, Camera, ChevronRight, ScanLine, Warehouse, Lock, FileText, AlertCircle, RefreshCw, AlertTriangle, MapPin, Cloud, Database, ArrowLeft, Loader2 } from 'lucide-react';
+import { Settings, Search, CheckCircle, X, Download, Plus, Trash2, Edit3, List, Camera, ChevronRight, ScanLine, Warehouse, Lock, FileText, AlertCircle, RefreshCw, AlertTriangle, MapPin, Cloud, Database, ArrowLeft, Loader2, History } from 'lucide-react';
 import { Scene3D } from './Scene3D';
 import { fetchStockFromCloud, fetchOpenOrdersFromCloud, markOrderComplete, updateOrderStatus } from '../utils/firebase';
 import { generatePickingList, reorderRemainingTasks, FLOORS, determineFloor } from '../utils/optimizer';
@@ -38,6 +38,10 @@ export const PickerInterface: React.FC<PickerInterfaceProps> = ({ onSwitchToMana
   // --- UI State ---
   const [activeOrderName, setActiveOrderName] = useState<string>('');
   const [activeOrderDate, setActiveOrderDate] = useState<string>('');
+  
+  // --- Session History State ---
+  const [sessionHistory, setSessionHistory] = useState<CloudOrder[]>([]);
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
 
   // --- Logic State ---
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
@@ -137,7 +141,6 @@ export const PickerInterface: React.FC<PickerInterfaceProps> = ({ onSwitchToMana
       
       try {
           // 1. Update status in Realtime Database to "IN PROCESS"
-          // We do this first to ensure backend knows it's being worked on
           await updateOrderStatus(order.id, 'IN PROCESS');
           
           // 2. Set Local State
@@ -145,9 +148,6 @@ export const PickerInterface: React.FC<PickerInterfaceProps> = ({ onSwitchToMana
           setActiveOrderDate(new Date(order.createdAt).toLocaleString());
           setOrders(order.items);
           setCurrentCloudOrder(order);
-          
-          // NOTE: We do NOT remove it from cloudOrders to allow user to see it's active.
-          // The button disabled state handles preventing double-clicks.
           
       } catch (e) {
           alert("Erro ao iniciar pedido. Verifique a conexão.");
@@ -178,9 +178,6 @@ export const PickerInterface: React.FC<PickerInterfaceProps> = ({ onSwitchToMana
     }
     calculateShortages(orders, stock);
     const tasks = generatePickingList(orders, stock, layoutCoords);
-    
-    // If NO tasks are generated, it means ALL items are missing or out of stock.
-    // We still want to start the session so the user can see the Summary.
     
     setPickingTasks(tasks);
     setCompletedTasks([]);
@@ -405,7 +402,9 @@ export const PickerInterface: React.FC<PickerInterfaceProps> = ({ onSwitchToMana
   };
 
   // --- Excel & Session & Helper Functions ---
-  const generateExcelFile = (sessionTasks: PickingTask[], orderName: string) => {
+  
+  // Generates Base64 string of Excel file
+  const generateExcelBase64 = (sessionTasks: PickingTask[], orderName: string): string => {
       const d = new Date();
       const formattedDate = `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth()+1).padStart(2, '0')}.${d.getFullYear()}`;
       const headers = ["Itm", "C", "I", "Cen.", "Depósito de saída", "Depósito", "Material", "Texto breve", "Lote", "Qtd.pedido", "Dt.remessa"];
@@ -417,7 +416,9 @@ export const PickerInterface: React.FC<PickerInterfaceProps> = ({ onSwitchToMana
       const ws = XLSX.utils.aoa_to_sheet(wsData);
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, "Picking");
-      XLSX.writeFile(wb, `${orderName || 'Picking'}_Concluido.xlsx`);
+      
+      // Return as Base64 string
+      return XLSX.write(wb, { bookType: 'xlsx', type: 'base64' });
   };
 
   const finishSession = () => {
@@ -441,20 +442,38 @@ export const PickerInterface: React.FC<PickerInterfaceProps> = ({ onSwitchToMana
   };
 
   const exportAndFinish = async () => {
-      generateExcelFile(completedTasks, activeOrderName);
+      const excelB64 = generateExcelBase64(completedTasks, activeOrderName);
       
-      // Update Cloud Status and save Picking Results
+      // Update Cloud Status and save Picking Results + Excel
       if (currentCloudOrder) {
-          await markOrderComplete(currentCloudOrder.id, completedTasks);
+          await markOrderComplete(currentCloudOrder.id, completedTasks, excelB64);
+          
+          // Add to session history
+          const finishedOrder: CloudOrder = {
+              ...currentCloudOrder,
+              status: 'FINISHED',
+              completedAt: new Date().toISOString(),
+              pickedItems: completedTasks
+          };
+          setSessionHistory(prev => [finishedOrder, ...prev]);
       }
 
       finishSession();
   };
 
-  const handleCloseCompletion = () => {
-      if (currentCloudOrder && confirm("Marcar encomenda como concluída na Cloud?")) {
-          // Pass completed tasks to save them in database
-          markOrderComplete(currentCloudOrder.id, completedTasks);
+  const handleCloseCompletion = async () => {
+      if (currentCloudOrder && confirm("Marcar encomenda como FINALIZADA na Cloud e Salvar Relatório?")) {
+          const excelB64 = generateExcelBase64(completedTasks, activeOrderName);
+          await markOrderComplete(currentCloudOrder.id, completedTasks, excelB64);
+          
+          // Add to session history
+          const finishedOrder: CloudOrder = {
+              ...currentCloudOrder,
+              status: 'FINISHED',
+              completedAt: new Date().toISOString(),
+              pickedItems: completedTasks
+          };
+          setSessionHistory(prev => [finishedOrder, ...prev]);
       }
       finishSession();
   };
@@ -711,6 +730,10 @@ export const PickerInterface: React.FC<PickerInterfaceProps> = ({ onSwitchToMana
             <div className="flex items-center gap-3">
                 <h2 className="text-xl font-bold text-[#4fc3f7] flex items-center gap-2"><Settings size={20} /> Seleção de Pedido</h2>
             </div>
+            {/* History Button */}
+            <button onClick={() => setIsHistoryOpen(true)} className="p-2 bg-[#263238] rounded-full border border-[#37474f] hover:bg-[#37474f] text-gray-400 hover:text-white" title="Histórico da Sessão">
+                <History size={20} />
+            </button>
           </div>
           <div className="flex-1 overflow-y-auto p-4 space-y-6">
              
@@ -791,6 +814,35 @@ export const PickerInterface: React.FC<PickerInterfaceProps> = ({ onSwitchToMana
         </div>
       )}
 
+      {/* Session History Modal */}
+      {isHistoryOpen && (
+          <div className="absolute inset-0 z-[60] bg-black/90 flex items-center justify-center p-4 animate-fade-in">
+              <div className="w-full max-w-lg bg-[#1a2332] border border-[#37474f] rounded-xl shadow-2xl flex flex-col overflow-hidden max-h-[80vh]">
+                  <div className="p-4 border-b border-[#37474f] flex justify-between items-center bg-[#141923]">
+                      <h2 className="text-xl font-bold text-white flex items-center gap-2"><History size={20} /> Histórico da Sessão</h2>
+                      <button onClick={() => setIsHistoryOpen(false)}><X size={24} className="text-gray-400 hover:text-white" /></button>
+                  </div>
+                  <div className="flex-1 overflow-y-auto p-4 space-y-3">
+                      {sessionHistory.length === 0 ? (
+                          <div className="text-center text-gray-500 py-8">Nenhum pedido finalizado nesta sessão.</div>
+                      ) : (
+                          sessionHistory.map(order => (
+                              <div key={order.id} className="bg-[#1e2736] p-3 rounded border border-[#37474f] flex justify-between items-center">
+                                  <div>
+                                      <div className="font-bold text-white">{order.name}</div>
+                                      <div className="text-xs text-gray-400">Finalizado: {new Date(order.completedAt!).toLocaleTimeString()}</div>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                      {order.status === 'FINISHED' && <span className="bg-green-900 text-green-300 text-xs px-2 py-1 rounded font-bold">FINALIZADO</span>}
+                                  </div>
+                              </div>
+                          ))
+                      )}
+                  </div>
+              </div>
+          </div>
+      )}
+
       {/* Pick List Modal */}
       {isPickListOpen && (
           <div className="absolute inset-0 z-50 flex items-center justify-center p-4 animate-fade-in bg-black/50 backdrop-blur-sm">
@@ -847,7 +899,7 @@ export const PickerInterface: React.FC<PickerInterfaceProps> = ({ onSwitchToMana
                  </div>
                  
                  <div className="p-4 bg-[#141923]/80 border-t border-[#37474f]">
-                     <button onClick={exportAndFinish} className="w-full py-3 bg-[#0277bd] text-white font-bold rounded-lg shadow-lg flex items-center justify-center gap-2 text-sm"><Download size={18} />CONCLUIR E EXPORTAR</button>
+                     <button onClick={exportAndFinish} className="w-full py-3 bg-[#0277bd] text-white font-bold rounded-lg shadow-lg flex items-center justify-center gap-2 text-sm"><Cloud size={18} />FINALIZAR E GUARDAR NA CLOUD</button>
                  </div>
              </div>
           </div>
@@ -885,7 +937,7 @@ export const PickerInterface: React.FC<PickerInterfaceProps> = ({ onSwitchToMana
                  </div>
              </div>
              <div className="p-6 bg-[#141923] border-t border-[#37474f] flex gap-3">
-                 <button onClick={exportAndFinish} className="flex-1 py-4 bg-[#00e676] text-black font-bold rounded-lg shadow-lg flex items-center justify-center gap-2 text-lg hover:bg-[#00c853] transition-colors"><Download size={24} /> EXPORTAR EXCEL E SAIR</button>
+                 <button onClick={exportAndFinish} className="flex-1 py-4 bg-[#00e676] text-black font-bold rounded-lg shadow-lg flex items-center justify-center gap-2 text-lg hover:bg-[#00c853] transition-colors"><Cloud size={24} /> FINALIZAR E GUARDAR</button>
                  <button onClick={handleCloseCompletion} className="w-20 bg-red-600 text-white font-bold rounded-lg shadow-lg flex items-center justify-center hover:bg-red-700 transition-colors"><X size={28} /></button>
              </div>
          </div>

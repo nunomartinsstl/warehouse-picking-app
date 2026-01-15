@@ -23,6 +23,8 @@ declare global {
       ambientLight: any;
       pointLight: any;
       directionalLight: any;
+      primitive: any;
+      [elemName: string]: any;
     }
   }
 }
