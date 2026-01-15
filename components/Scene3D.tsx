@@ -5,6 +5,28 @@ import * as THREE from 'three';
 import { LayoutNode, PickingTask, WarehouseLayout, Unit } from '../types';
 import { FLOORS } from '../utils/optimizer';
 
+// Declare Three.js intrinsic elements for JSX to satisfy TypeScript
+declare global {
+  namespace JSX {
+    interface IntrinsicElements {
+      group: any;
+      mesh: any;
+      boxGeometry: any;
+      meshStandardMaterial: any;
+      lineSegments: any;
+      edgesGeometry: any;
+      lineBasicMaterial: any;
+      meshLambertMaterial: any;
+      meshBasicMaterial: any;
+      planeGeometry: any;
+      sphereGeometry: any;
+      ambientLight: any;
+      pointLight: any;
+      directionalLight: any;
+    }
+  }
+}
+
 interface SceneProps {
   visualLayout: WarehouseLayout | null;
   layoutCoords: Map<string, LayoutNode>;
