@@ -1,5 +1,5 @@
 {
-  "name": "Warehouse Picker Pro",
+  "name": "Warehouse Picker",
   "description": "3D Warehouse visualization and picking route optimization tool. Upload Excel files for Layout, Stock, and Orders to generate efficient picking paths.",
   "requestFramePermissions": [
     "camera"

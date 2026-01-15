@@ -1,148 +1,243 @@
 
 import { initializeApp } from 'firebase/app';
-import { getFirestore, collection, getDocs, doc, writeBatch, setDoc, updateDoc, query, orderBy, where, deleteDoc } from 'firebase/firestore';
-import { StockItem, OrderItem, CloudOrder } from '../types';
+import { getDatabase, ref, get, child, update, set, push, remove } from 'firebase/database';
+import { StockItem, OrderItem, CloudOrder, PickingTask } from '../types';
 
-// --- PASTE YOUR FIREBASE CONFIG HERE ---
-// Ensure you have enabled Firestore Database in your Firebase Console
+// --- FIREBASE CONFIGURATION ---
 const firebaseConfig = {
-  apiKey: "AIzaSy...", // <--- REPLACE THIS
-  authDomain: "warehousepicker.firebaseapp.com", // <--- REPLACE THIS
-  projectId: "warehousepicker", // <--- REPLACE THIS
-  storageBucket: "warehousepicker.appspot.com", // <--- REPLACE THIS
-  messagingSenderId: "123...", // <--- REPLACE THIS
-  appId: "1:123..." // <--- REPLACE THIS
+  apiKey: "AIzaSyARcjDl6-8W15RHX17GLy3H68VfbRIOOgU",
+  authDomain: "setling-avac-data.firebaseapp.com",
+  databaseURL: "https://setling-avac-data-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId: "setling-avac-data",
+  storageBucket: "setling-avac-data.firebasestorage.app",
+  messagingSenderId: "730262521814",
+  appId: "1:730262521814:web:7ca301ea02a65b1df00677"
 };
 
-// Initialize only if not already initialized
-let db: any;
+// Initialize Firebase
+let db: any = null;
+let initError: string | null = null;
+
 try {
     const app = initializeApp(firebaseConfig);
-    db = getFirestore(app);
-} catch (e) {
-    console.error("Firebase init error (Did you replace the config?):", e);
+    
+    // CRITICAL FIX: Explicitly pass the URL to getDatabase. 
+    // This is required for databases hosted in 'europe-west1' to bypass region auto-detection failures.
+    db = getDatabase(app, firebaseConfig.databaseURL); 
+    
+    console.log("Firebase initialized. Connected to:", firebaseConfig.databaseURL);
+} catch (e: any) {
+    console.error("Firebase init error:", e);
+    initError = e.message || "Unknown Firebase initialization error";
 }
 
-// Helper to chunk arrays (Firestore batch limit is 500 ops)
-const chunkArray = <T>(array: T[], size: number): T[][] => {
-    const chunked: T[][] = [];
-    let index = 0;
-    while (index < array.length) {
-        chunked.push(array.slice(index, size + index));
-        index += size;
+// Helper to check DB status
+const ensureDb = () => {
+    if (!db) {
+        if (initError) throw new Error(`Erro na conexão Firebase: ${initError}`);
+        throw new Error("Base de dados não inicializada. Verifique a configuração.");
     }
-    return chunked;
+    return db;
 };
 
 // --- STOCK FUNCTIONS ---
 
-export const saveStockToCloud = async (stock: StockItem[]) => {
-    if (!db) throw new Error("Database not initialized");
-    
-    // 1. Get all current stock docs to delete them (Full Replace strategy)
-    const stockCollection = collection(db, 'stock');
-    const snapshot = await getDocs(stockCollection);
-    
-    // Delete in batches
-    const deleteBatches = chunkArray(snapshot.docs, 400);
-    for (const batchDocs of deleteBatches) {
-        const batch = writeBatch(db);
-        batchDocs.forEach((d: any) => batch.delete(d.ref));
-        await batch.commit();
-    }
-
-    // 2. Add new stock in batches
-    const addBatches = chunkArray(stock, 400);
-    for (const batchItems of addBatches) {
-        const batch = writeBatch(db);
-        batchItems.forEach(item => {
-            // Create a unique ID based on material + bin
-            const id = `${item.material}_${item.bin}`.replace(/\//g, '-').replace(/\s+/g, ''); 
-            const ref = doc(db, 'stock', id);
-            batch.set(ref, item);
-        });
-        await batch.commit();
-    }
-    return true;
-};
-
 export const fetchStockFromCloud = async (): Promise<StockItem[]> => {
-    if (!db) return [];
+    const database = ensureDb();
     try {
-        const snapshot = await getDocs(collection(db, 'stock'));
-        return snapshot.docs.map(d => d.data() as StockItem);
+        const dbRef = ref(database);
+        // Updated path to 'nexus_stock'
+        const snapshot = await get(child(dbRef, 'nexus_stock'));
+        if (snapshot.exists()) {
+            const data = snapshot.val();
+            const rawList = Array.isArray(data) ? data : Object.values(data);
+            
+            // Map 'nexus_stock' schema to internal 'StockItem' type
+            // External: sku, description, quantity, batch
+            // Internal: material, description, qtyAvailable, bin
+            return rawList.map((item: any) => ({
+                material: item.sku || '',
+                description: item.description || '',
+                qtyAvailable: Number(item.quantity) || 0,
+                // Using 'batch' as 'bin' location. If batch is "-", it's unassigned.
+                bin: (item.batch && item.batch !== '-') ? item.batch : 'Geral' 
+            })).filter(i => i.material);
+        } else {
+            console.warn("No stock found in DB (nexus_stock)");
+            return [];
+        }
     } catch (e) {
         console.error("Error fetching stock:", e);
-        return [];
+        throw e;
+    }
+};
+
+export const saveStockToCloud = async (stock: StockItem[]) => {
+    // Note: In the new structure, this might overwrite with the wrong format if not careful.
+    // Ideally, the other app handles stock updates, but keeping this for compatibility if needed.
+    const database = ensureDb();
+    try {
+        // Reverse mapping for saving (Internal -> External)
+        const nexusStock = stock.map(s => ({
+            sku: s.material,
+            description: s.description,
+            quantity: s.qtyAvailable,
+            batch: s.bin,
+            lastUpdated: new Date().toISOString()
+        }));
+        await set(ref(database, 'nexus_stock'), nexusStock);
+        console.log("Stock saved successfully to nexus_stock");
+    } catch (e) {
+        console.error("Error saving stock:", e);
+        throw e;
     }
 };
 
 // --- ORDER FUNCTIONS ---
 
-// Upload a new Order (from Excel)
-export const createCloudOrder = async (orderName: string, items: OrderItem[]) => {
-    if (!db) throw new Error("Database not initialized");
-    // Sanitize ID
-    const safeId = orderName.replace(/[^a-zA-Z0-9-_]/g, '_');
-    const orderRef = doc(db, 'orders', safeId);
-    
-    const newOrder: CloudOrder = {
-        id: safeId,
-        name: orderName,
-        items: items,
-        status: 'open',
-        createdAt: new Date().toISOString()
-    };
-
-    await setDoc(orderRef, newOrder);
-};
-
-// Fetch only OPEN orders for the Picker
 export const fetchOpenOrdersFromCloud = async (): Promise<CloudOrder[]> => {
-    if (!db) return [];
+    const database = ensureDb();
     try {
-        const q = query(
-            collection(db, 'orders'), 
-            where('status', '==', 'open'),
-            orderBy('createdAt', 'desc')
-        );
-        const snapshot = await getDocs(q);
-        return snapshot.docs.map(d => d.data() as CloudOrder);
+        // Updated path to 'nexus_orders'
+        const ordersRef = ref(database, 'nexus_orders');
+        const snapshot = await get(ordersRef);
+        
+        if (snapshot.exists()) {
+            const data = snapshot.val();
+            // Handle both Array and Object responses from Firebase
+            const allOrders = Object.keys(data).map(key => {
+                const rawOrder = data[key];
+                return {
+                    id: key, // Use the Firebase Key (or existing ID if valid)
+                    name: rawOrder.title || rawOrder.name || 'Sem Nome',
+                    status: rawOrder.status || 'OPEN',
+                    createdAt: rawOrder.dateCreated || rawOrder.createdAt || new Date().toISOString(),
+                    // Map items: sku -> material, quantity -> qty
+                    items: (rawOrder.items || []).map((i: any) => ({
+                        material: i.sku || i.material,
+                        qty: Number(i.quantity || i.qty)
+                    }))
+                };
+            }) as CloudOrder[];
+
+            // Client-side filter
+            const openOrders = allOrders.filter(o => o.status === 'OPEN' || o.status === 'IN PROCESS');
+            return openOrders;
+        }
+        return [];
     } catch (e) {
         console.error("Error fetching open orders:", e);
-        return [];
+        throw e;
     }
 };
 
-// Fetch COMPLETED orders for the Manager
 export const fetchCompletedOrdersFromCloud = async (): Promise<CloudOrder[]> => {
-    if (!db) return [];
+    const database = ensureDb();
     try {
-        const q = query(
-            collection(db, 'orders'), 
-            where('status', '==', 'completed'),
-            orderBy('completedAt', 'desc')
-        );
-        const snapshot = await getDocs(q);
-        return snapshot.docs.map(d => d.data() as CloudOrder);
+        const ordersRef = ref(database, 'nexus_orders');
+        const snapshot = await get(ordersRef);
+        
+        if (snapshot.exists()) {
+            const data = snapshot.val();
+            const allOrders = Object.keys(data).map(key => {
+                const rawOrder = data[key];
+                return {
+                    id: key,
+                    name: rawOrder.title || rawOrder.name || 'Sem Nome',
+                    status: rawOrder.status || 'OPEN',
+                    createdAt: rawOrder.dateCreated || rawOrder.createdAt || new Date().toISOString(),
+                    completedAt: rawOrder.completedAt,
+                    items: (rawOrder.items || []).map((i: any) => ({
+                        material: i.sku || i.material,
+                        qty: Number(i.quantity || i.qty)
+                    }))
+                };
+            }) as CloudOrder[];
+
+            return allOrders.filter(o => o.status === 'COMPLETED');
+        }
+        return [];
     } catch (e) {
         console.error("Error fetching completed orders:", e);
-        return [];
+        throw e;
     }
 };
 
-// Move order to completed status
-export const markOrderComplete = async (orderId: string) => {
-    if (!db) return;
-    const orderRef = doc(db, 'orders', orderId);
-    await updateDoc(orderRef, {
-        status: 'completed',
-        completedAt: new Date().toISOString()
-    });
+export const createCloudOrder = async (name: string, items: OrderItem[]) => {
+    const database = ensureDb();
+    try {
+        const ordersRef = ref(database, 'nexus_orders');
+        const newOrderRef = push(ordersRef);
+        
+        // Map Internal -> External format
+        const newOrder = {
+            id: newOrderRef.key,
+            title: name, // Internal 'name' -> External 'title'
+            items: items.map(i => ({
+                sku: i.material, // Internal 'material' -> External 'sku'
+                quantity: i.qty, // Internal 'qty' -> External 'quantity'
+                description: '', // Optional
+                isCustom: false
+            })),
+            status: 'OPEN',
+            dateCreated: new Date().toISOString(), // Internal 'createdAt' -> External 'dateCreated'
+            creator: 'WarehousePickerApp'
+        };
+        
+        await set(newOrderRef, newOrder);
+        console.log("Order created:", newOrderRef.key);
+        return newOrderRef.key;
+    } catch (e) {
+        console.error("Error creating order:", e);
+        throw e;
+    }
 };
 
-// Delete an order (Manager utility)
 export const deleteOrder = async (orderId: string) => {
-    if (!db) return;
-    await deleteDoc(doc(db, 'orders', orderId));
+    const database = ensureDb();
+    try {
+        await remove(ref(database, `nexus_orders/${orderId}`));
+        console.log("Order deleted:", orderId);
+    } catch (e) {
+        console.error("Error deleting order:", e);
+        throw e;
+    }
+};
+
+export const updateOrderStatus = async (orderId: string, newStatus: 'IN PROCESS' | 'COMPLETED') => {
+    const database = ensureDb();
+    
+    const updates: any = {};
+    updates[`/nexus_orders/${orderId}/status`] = newStatus;
+    
+    if (newStatus === 'COMPLETED') {
+        updates[`/nexus_orders/${orderId}/completedAt`] = new Date().toISOString();
+    }
+
+    try {
+        await update(ref(database), updates);
+        console.log(`Order ${orderId} updated to ${newStatus}`);
+    } catch (e) {
+        console.error(`Error updating order ${orderId}:`, e);
+        throw e;
+    }
+};
+
+export const markOrderComplete = async (orderId: string, pickedItems: PickingTask[] = []) => {
+    const database = ensureDb();
+    const updates: any = {};
+    
+    updates[`/nexus_orders/${orderId}/status`] = 'COMPLETED';
+    updates[`/nexus_orders/${orderId}/completedAt`] = new Date().toISOString();
+    
+    // Save picking results (upload to Cloud Order)
+    updates[`/nexus_orders/${orderId}/pickedItems`] = pickedItems;
+
+    try {
+        await update(ref(database), updates);
+        console.log(`Order ${orderId} completed and results uploaded.`);
+    } catch (e) {
+        console.error(`Error completing order ${orderId}:`, e);
+        throw e;
+    }
 };

@@ -1,3 +1,4 @@
+
 import * as XLSX from 'xlsx';
 import { LayoutNode, OrderItem, StockItem } from '../types';
 
@@ -21,27 +22,34 @@ export const parseExcel = (file: File): Promise<any[]> => {
 };
 
 export const processOrderFile = (data: any[]): OrderItem[] => {
-  // Expected: MATERIAL, QTD
-  return data.map((row) => ({
-    material: String(row['MATERIAL'] || row['Material'] || '').trim(),
-    qty: Number(row['QTD'] || row['Qtd'] || 0),
-  })).filter(i => i.material && i.qty > 0);
+  // Accepted headers (Case insensitive check logic needed or just check common variations)
+  return data.map((row) => {
+    // Find material column
+    const material = String(
+        row['MATERIAL'] || row['Material'] || row['Ref'] || row['Referencia'] || row['Referência'] || row['Part No'] || ''
+    ).trim();
+
+    // Find quantity column
+    const qty = Number(
+        row['QTD'] || row['Qtd'] || row['Quantity'] || row['Quantidade'] || row['Qty'] || 0
+    );
+
+    return { material, qty };
+  }).filter(i => i.material && i.qty > 0);
 };
 
 export const processStockFile = (data: any[]): StockItem[] => {
-  // Expected: Material, Lote, Utilização livre, Texto breve material
   return data.map((row) => ({
-    material: String(row['Material'] || '').trim(),
-    description: row['Texto breve material'] || '',
-    bin: String(row['Lote'] || '').trim(), // Lote is used as Bin Location based on prompt
-    qtyAvailable: Number(row['Utilização livre'] || 0),
+    material: String(row['Material'] || row['MATERIAL'] || '').trim(),
+    description: row['Texto breve material'] || row['Descricao'] || row['Descrição'] || '',
+    bin: String(row['Lote'] || row['Bin'] || row['Local'] || '').trim(), 
+    qtyAvailable: Number(row['Utilização livre'] || row['Qtd'] || row['Qty'] || 0),
   })).filter(i => i.bin && i.material);
 };
 
 export const processLayoutFile = (data: any[]): LayoutNode[] => {
-  // Expected: Ref Completa, X, Y, Z
   return data.map((row) => ({
-    bin: String(row['Ref Completa'] || '').trim(),
+    bin: String(row['Ref Completa'] || row['Bin'] || '').trim(),
     x: Number(row['X'] || 0),
     y: Number(row['Y'] || 0),
     z: Number(row['Z'] || 0),
