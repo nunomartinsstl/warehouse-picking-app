@@ -103,4 +103,5 @@ export interface CloudOrder {
     pickerId?: string;
     pickedItems?: PickingTask[]; // Store the results
     excelReport?: string; // Base64 string of the generated Excel file
+    isUploaded?: boolean; // Local state flag
 }

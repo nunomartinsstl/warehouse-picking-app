@@ -6,7 +6,31 @@ import { LayoutNode, PickingTask, WarehouseLayout, Unit } from '../types';
 import { FLOORS } from '../utils/optimizer';
 
 // Declare Three.js intrinsic elements for JSX to satisfy TypeScript
+// We extend both global JSX and React.JSX namespaces to ensure compatibility with different TS/React configurations
 declare global {
+  namespace JSX {
+    interface IntrinsicElements {
+      group: any;
+      mesh: any;
+      boxGeometry: any;
+      meshStandardMaterial: any;
+      lineSegments: any;
+      edgesGeometry: any;
+      lineBasicMaterial: any;
+      meshLambertMaterial: any;
+      meshBasicMaterial: any;
+      planeGeometry: any;
+      sphereGeometry: any;
+      ambientLight: any;
+      pointLight: any;
+      directionalLight: any;
+      primitive: any;
+      [elemName: string]: any;
+    }
+  }
+}
+
+declare module 'react' {
   namespace JSX {
     interface IntrinsicElements {
       group: any;

@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Settings, Search, CheckCircle, X, Download, Plus, Trash2, Edit3, List, Camera, ChevronRight, ScanLine, Warehouse, Lock, FileText, AlertCircle, RefreshCw, AlertTriangle, MapPin, Cloud, Database, ArrowLeft, Loader2, History } from 'lucide-react';
+import { Settings, Search, CheckCircle, X, Download, Plus, Trash2, Edit3, List, Camera, ChevronRight, ScanLine, Warehouse, Lock, FileText, AlertCircle, RefreshCw, AlertTriangle, MapPin, Cloud, Database, ArrowLeft, Loader2, History, Save, UploadCloud } from 'lucide-react';
 import { Scene3D } from './Scene3D';
 import { fetchStockFromCloud, fetchOpenOrdersFromCloud, markOrderComplete, updateOrderStatus } from '../utils/firebase';
 import { generatePickingList, reorderRemainingTasks, FLOORS, determineFloor } from '../utils/optimizer';
@@ -42,6 +42,7 @@ export const PickerInterface: React.FC<PickerInterfaceProps> = ({ onSwitchToMana
   // --- Session History State ---
   const [sessionHistory, setSessionHistory] = useState<CloudOrder[]>([]);
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+  const [isUploading, setIsUploading] = useState<string | null>(null); // Track uploading ID
 
   // --- Logic State ---
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
@@ -421,10 +422,6 @@ export const PickerInterface: React.FC<PickerInterfaceProps> = ({ onSwitchToMana
       return XLSX.write(wb, { bookType: 'xlsx', type: 'base64' });
   };
 
-  const finishSession = () => {
-       clearSession();
-  };
-
   const clearSession = () => {
       setPickingTasks([]);
       setCompletedTasks([]);
@@ -441,41 +438,77 @@ export const PickerInterface: React.FC<PickerInterfaceProps> = ({ onSwitchToMana
       refreshCloudData();
   };
 
-  const exportAndFinish = async () => {
-      const excelB64 = generateExcelBase64(completedTasks, activeOrderName);
-      
-      // Update Cloud Status and save Picking Results + Excel
+  const saveSessionLocal = () => {
       if (currentCloudOrder) {
-          await markOrderComplete(currentCloudOrder.id, completedTasks, excelB64);
+          const excelB64 = generateExcelBase64(completedTasks, activeOrderName);
           
-          // Add to session history
           const finishedOrder: CloudOrder = {
               ...currentCloudOrder,
               status: 'FINISHED',
               completedAt: new Date().toISOString(),
-              pickedItems: completedTasks
+              pickedItems: completedTasks,
+              excelReport: excelB64,
+              isUploaded: false // Mark as local only
           };
+          
           setSessionHistory(prev => [finishedOrder, ...prev]);
+          clearSession();
       }
-
-      finishSession();
   };
 
-  const handleCloseCompletion = async () => {
-      if (currentCloudOrder && confirm("Marcar encomenda como FINALIZADA na Cloud e Salvar Relatório?")) {
-          const excelB64 = generateExcelBase64(completedTasks, activeOrderName);
-          await markOrderComplete(currentCloudOrder.id, completedTasks, excelB64);
+  const handleUploadOrder = async (order: CloudOrder) => {
+      setIsUploading(order.id);
+      try {
+          await markOrderComplete(order.id, order.pickedItems || [], order.excelReport || '');
           
-          // Add to session history
-          const finishedOrder: CloudOrder = {
-              ...currentCloudOrder,
-              status: 'FINISHED',
-              completedAt: new Date().toISOString(),
-              pickedItems: completedTasks
-          };
-          setSessionHistory(prev => [finishedOrder, ...prev]);
+          // Update local status
+          setSessionHistory(prev => prev.map(o => 
+              o.id === order.id ? { ...o, isUploaded: true } : o
+          ));
+          
+      } catch (e: any) {
+          alert(`Erro ao fazer upload: ${e.message}`);
+      } finally {
+          setIsUploading(null);
       }
-      finishSession();
+  };
+
+  const handleDeleteSessionOrder = (id: string) => {
+      if (confirm("Remover este pedido da lista local? Se não foi feito upload, os dados serão perdidos.")) {
+          setSessionHistory(prev => prev.filter(o => o.id !== id));
+      }
+  };
+
+  const handleEditSessionOrder = (order: CloudOrder) => {
+      if (activeOrderName) {
+          alert("Por favor, termine ou cancele o pedido atual antes de editar um anterior.");
+          return;
+      }
+      
+      // Restore state
+      setCurrentCloudOrder(order);
+      setActiveOrderName(order.name);
+      setActiveOrderDate(new Date(order.createdAt).toLocaleString());
+      setOrders(order.items);
+      setCompletedTasks(order.pickedItems || []);
+      
+      // Note: We need to re-generate the full picking route to allow adding items, 
+      // but preserve the "picked" status of completed items.
+      calculateShortages(order.items, stock);
+      const tasks = generatePickingList(order.items, stock, layoutCoords);
+      
+      // Merge picked info back into generated tasks if possible, 
+      // or just trust the `pickedItems` as the source of truth for what's done.
+      setPickingTasks(tasks); 
+      
+      // Remove from history (it's active now)
+      setSessionHistory(prev => prev.filter(o => o.id !== order.id));
+      
+      setIsHistoryOpen(false);
+      setIsSetupOpen(false);
+      setIsCompletionOpen(false);
+      setFocusedTaskIndex(null); // Let user choose where to start
+      setIsPickListOpen(true); // Open list to show status
   };
 
   const getPickListSummary = () => {
@@ -685,6 +718,10 @@ export const PickerInterface: React.FC<PickerInterfaceProps> = ({ onSwitchToMana
       <div className="absolute top-0 left-0 right-0 z-20 p-4 pointer-events-none">
         <div className="flex gap-2 pointer-events-auto mb-2">
           <button onClick={() => setIsSetupOpen(true)} className="bg-[#263238] p-3 rounded-lg shadow-lg border border-[#37474f] text-white hover:bg-[#37474f] transition-colors"><Settings size={24} /></button>
+          <button onClick={() => setIsHistoryOpen(true)} className="bg-[#263238] p-3 rounded-lg shadow-lg border border-[#37474f] text-white hover:bg-[#37474f] transition-colors relative">
+              <History size={24} />
+              {sessionHistory.some(o => !o.isUploaded) && <div className="absolute top-2 right-2 w-2.5 h-2.5 bg-yellow-500 rounded-full border border-[#263238]"></div>}
+          </button>
           
           <div className="flex-1 relative">
             <input type="text" placeholder="Pesquisar / Ad-Hoc..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="w-full h-full bg-[#263238] border border-[#37474f] rounded-lg pl-10 pr-4 text-white focus:outline-none" />
@@ -730,10 +767,6 @@ export const PickerInterface: React.FC<PickerInterfaceProps> = ({ onSwitchToMana
             <div className="flex items-center gap-3">
                 <h2 className="text-xl font-bold text-[#4fc3f7] flex items-center gap-2"><Settings size={20} /> Seleção de Pedido</h2>
             </div>
-            {/* History Button */}
-            <button onClick={() => setIsHistoryOpen(true)} className="p-2 bg-[#263238] rounded-full border border-[#37474f] hover:bg-[#37474f] text-gray-400 hover:text-white" title="Histórico da Sessão">
-                <History size={20} />
-            </button>
           </div>
           <div className="flex-1 overflow-y-auto p-4 space-y-6">
              
@@ -814,26 +847,76 @@ export const PickerInterface: React.FC<PickerInterfaceProps> = ({ onSwitchToMana
         </div>
       )}
 
-      {/* Session History Modal */}
+      {/* Session History Modal (Session Manager) */}
       {isHistoryOpen && (
           <div className="absolute inset-0 z-[60] bg-black/90 flex items-center justify-center p-4 animate-fade-in">
-              <div className="w-full max-w-lg bg-[#1a2332] border border-[#37474f] rounded-xl shadow-2xl flex flex-col overflow-hidden max-h-[80vh]">
+              <div className="w-full max-w-2xl bg-[#1a2332] border border-[#37474f] rounded-xl shadow-2xl flex flex-col overflow-hidden max-h-[85vh]">
                   <div className="p-4 border-b border-[#37474f] flex justify-between items-center bg-[#141923]">
                       <h2 className="text-xl font-bold text-white flex items-center gap-2"><History size={20} /> Histórico da Sessão</h2>
                       <button onClick={() => setIsHistoryOpen(false)}><X size={24} className="text-gray-400 hover:text-white" /></button>
                   </div>
+                  
+                  <div className="bg-[#1e2736]/50 p-4 border-b border-[#37474f] text-sm text-gray-400">
+                      Aqui pode gerir os pedidos concluídos nesta sessão. Edite ou faça upload para a cloud.
+                  </div>
+
                   <div className="flex-1 overflow-y-auto p-4 space-y-3">
                       {sessionHistory.length === 0 ? (
-                          <div className="text-center text-gray-500 py-8">Nenhum pedido finalizado nesta sessão.</div>
+                          <div className="text-center text-gray-500 py-12 flex flex-col items-center">
+                              <History size={48} className="mb-4 opacity-20" />
+                              <p>Nenhum pedido finalizado nesta sessão.</p>
+                          </div>
                       ) : (
                           sessionHistory.map(order => (
-                              <div key={order.id} className="bg-[#1e2736] p-3 rounded border border-[#37474f] flex justify-between items-center">
-                                  <div>
-                                      <div className="font-bold text-white">{order.name}</div>
-                                      <div className="text-xs text-gray-400">Finalizado: {new Date(order.completedAt!).toLocaleTimeString()}</div>
+                              <div key={order.id} className="bg-[#1e2736] p-4 rounded border border-[#37474f] flex justify-between items-center group">
+                                  <div className="flex-1">
+                                      <div className="flex items-center gap-2 mb-1">
+                                          {order.isUploaded ? (
+                                              <CheckCircle size={16} className="text-green-500" />
+                                          ) : (
+                                              <div className="w-4 h-4 rounded-full border-2 border-yellow-500 bg-yellow-500/20" title="Aguardar Upload"></div>
+                                          )}
+                                          <div className="font-bold text-white text-lg">{order.name}</div>
+                                      </div>
+                                      <div className="text-xs text-gray-400 flex items-center gap-2">
+                                          <span>Finalizado: {new Date(order.completedAt!).toLocaleTimeString()}</span>
+                                          <span className="w-1 h-1 rounded-full bg-gray-600"></span>
+                                          <span>{order.pickedItems?.length} Itens</span>
+                                          {!order.isUploaded && <span className="text-yellow-500 font-bold ml-2">LOCAL</span>}
+                                      </div>
                                   </div>
+                                  
                                   <div className="flex items-center gap-2">
-                                      {order.status === 'FINISHED' && <span className="bg-green-900 text-green-300 text-xs px-2 py-1 rounded font-bold">FINALIZADO</span>}
+                                      {/* Actions */}
+                                      {!order.isUploaded && (
+                                          <>
+                                              <button 
+                                                  onClick={() => handleUploadOrder(order)}
+                                                  disabled={isUploading === order.id} 
+                                                  className="p-3 bg-[#0277bd] text-white rounded hover:bg-[#0288d1] disabled:opacity-50 disabled:cursor-wait shadow-lg flex items-center gap-2"
+                                                  title="Fazer Upload para Cloud"
+                                              >
+                                                  {isUploading === order.id ? <Loader2 className="animate-spin" size={20} /> : <UploadCloud size={20} />}
+                                                  <span className="hidden sm:inline font-bold text-xs">UPLOAD</span>
+                                              </button>
+                                              
+                                              <button 
+                                                  onClick={() => handleEditSessionOrder(order)}
+                                                  className="p-3 bg-[#37474f] text-gray-200 border border-[#455a64] rounded hover:bg-[#455a64] hover:text-white transition-colors"
+                                                  title="Editar (Voltar ao Picking)"
+                                              >
+                                                  <Edit3 size={20} />
+                                              </button>
+                                          </>
+                                      )}
+                                      
+                                      <button 
+                                          onClick={() => handleDeleteSessionOrder(order.id)}
+                                          className="p-3 text-red-400 hover:bg-red-900/30 rounded transition-colors"
+                                          title="Remover do Histórico"
+                                      >
+                                          <Trash2 size={20} />
+                                      </button>
                                   </div>
                               </div>
                           ))
@@ -899,7 +982,7 @@ export const PickerInterface: React.FC<PickerInterfaceProps> = ({ onSwitchToMana
                  </div>
                  
                  <div className="p-4 bg-[#141923]/80 border-t border-[#37474f]">
-                     <button onClick={exportAndFinish} className="w-full py-3 bg-[#0277bd] text-white font-bold rounded-lg shadow-lg flex items-center justify-center gap-2 text-sm"><Cloud size={18} />FINALIZAR E GUARDAR NA CLOUD</button>
+                     <button onClick={saveSessionLocal} className="w-full py-3 bg-[#0277bd] text-white font-bold rounded-lg shadow-lg flex items-center justify-center gap-2 text-sm"><Save size={18} />CONCLUIR (GUARDAR LOCALMENTE)</button>
                  </div>
              </div>
           </div>
@@ -937,8 +1020,8 @@ export const PickerInterface: React.FC<PickerInterfaceProps> = ({ onSwitchToMana
                  </div>
              </div>
              <div className="p-6 bg-[#141923] border-t border-[#37474f] flex gap-3">
-                 <button onClick={exportAndFinish} className="flex-1 py-4 bg-[#00e676] text-black font-bold rounded-lg shadow-lg flex items-center justify-center gap-2 text-lg hover:bg-[#00c853] transition-colors"><Cloud size={24} /> FINALIZAR E GUARDAR</button>
-                 <button onClick={handleCloseCompletion} className="w-20 bg-red-600 text-white font-bold rounded-lg shadow-lg flex items-center justify-center hover:bg-red-700 transition-colors"><X size={28} /></button>
+                 <button onClick={saveSessionLocal} className="flex-1 py-4 bg-[#00e676] text-black font-bold rounded-lg shadow-lg flex items-center justify-center gap-2 text-lg hover:bg-[#00c853] transition-colors"><Save size={24} /> CONCLUIR (GUARDAR LOCALMENTE)</button>
+                 <button onClick={() => setIsCompletionOpen(false)} className="w-20 bg-red-600 text-white font-bold rounded-lg shadow-lg flex items-center justify-center hover:bg-red-700 transition-colors"><X size={28} /></button>
              </div>
          </div>
       )}
