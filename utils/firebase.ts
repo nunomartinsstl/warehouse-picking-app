@@ -1,4 +1,3 @@
-
 import { initializeApp } from 'firebase/app';
 import { getDatabase, ref, get, child, update, set, push, remove } from 'firebase/database';
 import { StockItem, OrderItem, CloudOrder, PickingTask } from '../types';
@@ -147,6 +146,7 @@ export const fetchCompletedOrdersFromCloud = async (): Promise<CloudOrder[]> => 
                     status: rawOrder.status || 'OPEN',
                     createdAt: rawOrder.dateCreated || rawOrder.createdAt || new Date().toISOString(),
                     completedAt: rawOrder.completedAt,
+                    pickedItems: rawOrder.pickedItems || [],
                     items: (rawOrder.items || []).map((i: any) => ({
                         material: i.sku || i.material,
                         qty: Number(i.quantity || i.qty)
@@ -154,8 +154,8 @@ export const fetchCompletedOrdersFromCloud = async (): Promise<CloudOrder[]> => 
                 };
             }) as CloudOrder[];
 
-            // Updated status check to 'FINISHED'
-            return allOrders.filter(o => o.status === 'FINISHED');
+            // Updated status check to 'COMPLETED'
+            return allOrders.filter(o => o.status === 'COMPLETED');
         }
         return [];
     } catch (e) {
@@ -205,13 +205,33 @@ export const deleteOrder = async (orderId: string) => {
     }
 };
 
-export const updateOrderStatus = async (orderId: string, newStatus: 'IN PROCESS' | 'FINISHED') => {
+// New function to revert a completed order back to OPEN (Removing picking data)
+export const revertOrderToOpen = async (orderId: string) => {
+    const database = ensureDb();
+    const updates: any = {};
+    
+    updates[`/nexus_orders/${orderId}/status`] = 'OPEN';
+    updates[`/nexus_orders/${orderId}/completedAt`] = null;
+    updates[`/nexus_orders/${orderId}/pickedItems`] = null;
+    updates[`/nexus_orders/${orderId}/excelReport`] = null;
+    updates[`/nexus_orders/${orderId}/exportData`] = null;
+
+    try {
+        await update(ref(database), updates);
+        console.log(`Order ${orderId} reverted to OPEN. Picking data cleared.`);
+    } catch (e) {
+        console.error(`Error reverting order ${orderId}:`, e);
+        throw e;
+    }
+};
+
+export const updateOrderStatus = async (orderId: string, newStatus: 'OPEN' | 'IN PROCESS' | 'COMPLETED') => {
     const database = ensureDb();
     
     const updates: any = {};
     updates[`/nexus_orders/${orderId}/status`] = newStatus;
     
-    if (newStatus === 'FINISHED') {
+    if (newStatus === 'COMPLETED') {
         updates[`/nexus_orders/${orderId}/completedAt`] = new Date().toISOString();
     }
 
@@ -228,12 +248,30 @@ export const markOrderComplete = async (orderId: string, pickedItems: PickingTas
     const database = ensureDb();
     const updates: any = {};
     
-    updates[`/nexus_orders/${orderId}/status`] = 'FINISHED';
+    updates[`/nexus_orders/${orderId}/status`] = 'COMPLETED';
     updates[`/nexus_orders/${orderId}/completedAt`] = new Date().toISOString();
     
     // Save picking results (upload to Cloud Order)
     updates[`/nexus_orders/${orderId}/pickedItems`] = pickedItems;
     
+    // GENERATE EXPORT DATA STRUCTURE
+    // Format: Itm, C, I, Cen., Depósito de saída, Depósito, Material, Texto breve, Lote, Qtd.pedido, Dt.remessa
+    const exportData = pickedItems.map((task, index) => ({
+        Itm: (index + 1) * 10,
+        C: 'P',
+        I: '',
+        Cen: '1700',
+        DepositoSaida: '0001',
+        Deposito: '0004',
+        Material: task.material,
+        TextoBreve: '', // Description not always available in task context, left empty for external fill
+        Lote: task.bin, // The picked bin
+        QtdPedido: task.pickedQty ?? 0, // Ensure value is not undefined (default to 0)
+        DtRemessa: new Date().toLocaleDateString('pt-PT') // Today's date DD/MM/YYYY
+    }));
+
+    updates[`/nexus_orders/${orderId}/exportData`] = exportData;
+
     // Save Excel report if provided
     if (excelReportBase64) {
         updates[`/nexus_orders/${orderId}/excelReport`] = excelReportBase64;

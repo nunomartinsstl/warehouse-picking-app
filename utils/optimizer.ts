@@ -11,8 +11,10 @@ export const FLOORS = [
     { id: 2, maxX: 9999, start: { x: 153, y: 0, z: -14 }, rotation: -Math.PI/2 } 
 ];
 
+// CHANGED: Use Manhattan Distance (Taxicab geometry) to approximate warehouse aisle movement
+// This prevents "diagonal" routes that would clip through racks/objects.
 const getDistance = (p1: { x: number; y: number; z: number }, p2: { x: number; y: number; z: number }) => {
-  return Math.sqrt(Math.pow(p2.x - p1.x, 2) + Math.pow(p2.y - p1.y, 2) + Math.pow(p2.z - p1.z, 2));
+  return Math.abs(p2.x - p1.x) + Math.abs(p2.y - p1.y) + Math.abs(p2.z - p1.z);
 };
 
 export const determineFloor = (x: number): number => {
@@ -55,6 +57,7 @@ export const reorderRemainingTasks = (
             
             newRoute.push({
                 ...nextTask,
+                sequence: newRoute.length + 1, // Update sequence
                 distanceFromLast: minDist,
                 startNewSection: floorChanged // Mark visual break if floor changed
             });
@@ -116,11 +119,28 @@ export const generatePickingList = (
 
            if (candidateStock.length === 0) break;
 
-           // Find nearest
+           // --- IMPROVED SELECTION LOGIC ---
+           // We prefer a location that can satisfy the ENTIRE remaining need for a material.
+           // This prevents picking 1 unit from A and 1 unit from B, when C has 2 units.
+           
            let bestIdx = -1;
            let minDist = Infinity;
+           
+           // Check if there are any candidates that have enough stock to fill the order line completely
+           const sufficientStockIndices = candidateStock
+                .map((s, idx) => {
+                    const needed = remainingOrders.find(o => o.material === s.material)!.qty;
+                    return s.qtyAvailable >= needed ? idx : -1;
+                })
+                .filter(idx => idx !== -1);
 
-           for (let i = 0; i < candidateStock.length; i++) {
+           // If we have "sufficient" candidates, restrict search to only those (Optimization Priority: Minimize Picks > Minimize Distance)
+           // If no single location has enough, we fallback to all candidates (Standard Priority: Minimize Distance)
+           const searchIndices = sufficientStockIndices.length > 0 
+                ? sufficientStockIndices 
+                : candidateStock.map((_, idx) => idx);
+
+           for (const i of searchIndices) {
               const dist = getDistance(currentPos, candidateStock[i]);
               if (dist < minDist) {
                   minDist = dist;

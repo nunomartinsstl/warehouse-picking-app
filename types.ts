@@ -91,7 +91,7 @@ export interface ProcessedData {
 }
 
 // --- CLOUD TYPES ---
-export type OrderStatus = 'OPEN' | 'IN PROCESS' | 'FINISHED';
+export type OrderStatus = 'OPEN' | 'IN PROCESS' | 'COMPLETED';
 
 export interface CloudOrder {
     id: string; // Firestore ID

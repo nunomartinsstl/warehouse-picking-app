@@ -5,51 +5,30 @@ import * as THREE from 'three';
 import { LayoutNode, PickingTask, WarehouseLayout, Unit } from '../types';
 import { FLOORS } from '../utils/optimizer';
 
-// Declare Three.js intrinsic elements for JSX to satisfy TypeScript
-// We extend both global JSX and React.JSX namespaces to ensure compatibility with different TS/React configurations
-declare global {
-  namespace JSX {
-    interface IntrinsicElements {
-      group: any;
-      mesh: any;
-      boxGeometry: any;
-      meshStandardMaterial: any;
-      lineSegments: any;
-      edgesGeometry: any;
-      lineBasicMaterial: any;
-      meshLambertMaterial: any;
-      meshBasicMaterial: any;
-      planeGeometry: any;
-      sphereGeometry: any;
-      ambientLight: any;
-      pointLight: any;
-      directionalLight: any;
-      primitive: any;
-      [elemName: string]: any;
-    }
-  }
+// Define the Three.js elements we are using
+interface ThreeElements {
+  group: any;
+  mesh: any;
+  boxGeometry: any;
+  meshStandardMaterial: any;
+  lineSegments: any;
+  edgesGeometry: any;
+  lineBasicMaterial: any;
+  meshLambertMaterial: any;
+  meshBasicMaterial: any;
+  planeGeometry: any;
+  sphereGeometry: any;
+  ambientLight: any;
+  pointLight: any;
+  directionalLight: any;
+  primitive: any;
+  [elemName: string]: any;
 }
 
-declare module 'react' {
+// Augment global JSX namespace
+declare global {
   namespace JSX {
-    interface IntrinsicElements {
-      group: any;
-      mesh: any;
-      boxGeometry: any;
-      meshStandardMaterial: any;
-      lineSegments: any;
-      edgesGeometry: any;
-      lineBasicMaterial: any;
-      meshLambertMaterial: any;
-      meshBasicMaterial: any;
-      planeGeometry: any;
-      sphereGeometry: any;
-      ambientLight: any;
-      pointLight: any;
-      directionalLight: any;
-      primitive: any;
-      [elemName: string]: any;
-    }
+    interface IntrinsicElements extends ThreeElements {}
   }
 }
 
@@ -61,7 +40,216 @@ interface SceneProps {
   focusedTaskIndex: number | null;
   activePathStart?: { x: number; y: number; z: number }; 
   visibleFloor: number | null; // New prop to control floor visibility
+  isHighlightActive?: boolean; // Controls transparency mode
+  isZoomedIn?: boolean; // Controls camera zoom
 }
+
+// --- A* PATHFINDING UTILS ---
+
+interface Point { x: number, z: number }
+interface Obstacle { minX: number, maxX: number, minZ: number, maxZ: number }
+interface FloorData { obstacles: Obstacle[], bounds: Obstacle }
+
+const getGridKey = (p: Point) => `${Math.round(p.x)},${Math.round(p.z)}`;
+
+const isBlocked = (p: Point, obstacles: Obstacle[]): boolean => {
+    // Check if point is inside any obstacle
+    // We assume point is integer grid, obstacle bounds are floats
+    // We consider a node blocked if it falls strictly inside the obstacle padding
+    const padding = 0.5;
+    for (const obs of obstacles) {
+        if (p.x >= obs.minX - padding && p.x <= obs.maxX + padding && 
+            p.z >= obs.minZ - padding && p.z <= obs.maxZ + padding) {
+            return true;
+        }
+    }
+    return false;
+};
+
+// BFS to find the nearest non-blocked node if start/end are inside an obstacle
+const findNearestWalkable = (p: Point, obstacles: Obstacle[], bounds: Obstacle): Point => {
+    if (!isBlocked(p, obstacles)) return p;
+    
+    const queue: Point[] = [p];
+    const visited = new Set<string>([getGridKey(p)]);
+    
+    // Limit search to avoid hanging if map is broken
+    let iterations = 0;
+    const MAX_SEARCH = 500;
+
+    while (queue.length > 0 && iterations < MAX_SEARCH) {
+        iterations++;
+        const curr = queue.shift()!;
+        
+        const moves = [
+            { x: 1, z: 0 }, { x: -1, z: 0 }, 
+            { x: 0, z: 1 }, { x: 0, z: -1 }
+        ];
+
+        for (const m of moves) {
+            const next = { x: curr.x + m.x, z: curr.z + m.z };
+            
+            // Bounds Check
+            if (next.x < bounds.minX || next.x > bounds.maxX || 
+                next.z < bounds.minZ || next.z > bounds.maxZ) {
+                continue;
+            }
+
+            const key = getGridKey(next);
+            if (visited.has(key)) continue;
+            visited.add(key);
+
+            if (!isBlocked(next, obstacles)) {
+                return next;
+            }
+            queue.push(next);
+        }
+    }
+    return p; // Fallback
+};
+
+const findPathAStar = (
+    start: THREE.Vector3, 
+    end: THREE.Vector3, 
+    floorData: FloorData | undefined
+): THREE.Vector3[] => {
+    // If no obstacle data, fallback to direct L-shape
+    if (!floorData) {
+        return [start, new THREE.Vector3(start.x, 0.5, end.z), end];
+    }
+
+    const { obstacles, bounds } = floorData;
+    
+    // 1. Resolve Start and End to nearest Walkable Nodes
+    // Because picking locations are often "inside" the rack volume, we must find the adjacent aisle.
+    const rawStart = { x: Math.round(start.x), z: Math.round(start.z) };
+    const rawEnd = { x: Math.round(end.x), z: Math.round(end.z) };
+
+    const gridStart = findNearestWalkable(rawStart, obstacles, bounds);
+    const gridEnd = findNearestWalkable(rawEnd, obstacles, bounds);
+
+    const startKey = getGridKey(gridStart);
+    const endKey = getGridKey(gridEnd);
+
+    // Standard A*
+    const openSet: Point[] = [gridStart];
+    const cameFrom = new Map<string, Point>();
+    const gScore = new Map<string, number>();
+    const fScore = new Map<string, number>();
+
+    gScore.set(startKey, 0);
+    fScore.set(startKey, Math.abs(gridStart.x - gridEnd.x) + Math.abs(gridStart.z - gridEnd.z));
+
+    const openSetHash = new Set<string>([startKey]);
+    
+    let iterations = 0;
+    const MAX_ITERATIONS = 5000; 
+
+    while (openSet.length > 0) {
+        iterations++;
+        if (iterations > MAX_ITERATIONS) break;
+
+        // Sort by F-score
+        openSet.sort((a, b) => (fScore.get(getGridKey(a)) || Infinity) - (fScore.get(getGridKey(b)) || Infinity));
+        
+        const current = openSet.shift()!;
+        const currentKey = getGridKey(current);
+        openSetHash.delete(currentKey);
+
+        if (current.x === gridEnd.x && current.z === gridEnd.z) {
+            return reconstructPath(cameFrom, current, start, end);
+        }
+
+        const neighbors = [
+            { x: current.x + 1, z: current.z },
+            { x: current.x - 1, z: current.z },
+            { x: current.x, z: current.z + 1 },
+            { x: current.x, z: current.z - 1 }
+        ];
+
+        for (const neighbor of neighbors) {
+            if (neighbor.x < bounds.minX || neighbor.x > bounds.maxX || 
+                neighbor.z < bounds.minZ || neighbor.z > bounds.maxZ) {
+                continue;
+            }
+
+            if (isBlocked(neighbor, obstacles)) {
+                continue;
+            }
+
+            const neighborKey = getGridKey(neighbor);
+            const tentativeG = (gScore.get(currentKey) || Infinity) + 1;
+
+            if (tentativeG < (gScore.get(neighborKey) || Infinity)) {
+                cameFrom.set(neighborKey, current);
+                gScore.set(neighborKey, tentativeG);
+                fScore.set(neighborKey, tentativeG + (Math.abs(neighbor.x - gridEnd.x) + Math.abs(neighbor.z - gridEnd.z)));
+                
+                if (!openSetHash.has(neighborKey)) {
+                    openSet.push(neighbor);
+                    openSetHash.add(neighborKey);
+                }
+            }
+        }
+    }
+
+    // Fallback if no path found (e.g., disjoint areas)
+    return [start, new THREE.Vector3(start.x, 0.5, end.z), end];
+};
+
+const reconstructPath = (cameFrom: Map<string, Point>, current: Point, realStart: THREE.Vector3, realEnd: THREE.Vector3) => {
+    const path: THREE.Vector3[] = [];
+    
+    // Backtrack from Grid End to Grid Start
+    let curr = current;
+    while (cameFrom.has(getGridKey(curr))) {
+        path.unshift(new THREE.Vector3(curr.x, 0.5, curr.z));
+        curr = cameFrom.get(getGridKey(curr))!;
+    }
+    // Add grid start
+    path.unshift(new THREE.Vector3(curr.x, 0.5, curr.z));
+
+    // Simplify Path (Remove collinear points)
+    const simplified: THREE.Vector3[] = [];
+    if (path.length > 0) {
+        simplified.push(path[0]);
+        let lastDirX = 0;
+        let lastDirZ = 0;
+        
+        if (path.length > 1) {
+            lastDirX = Math.sign(path[1].x - path[0].x);
+            lastDirZ = Math.sign(path[1].z - path[0].z);
+        }
+
+        for (let i = 1; i < path.length - 1; i++) {
+            const nextDirX = Math.sign(path[i+1].x - path[i].x);
+            const nextDirZ = Math.sign(path[i+1].z - path[i].z);
+            
+            if (nextDirX !== lastDirX || nextDirZ !== lastDirZ) {
+                simplified.push(path[i]);
+                lastDirX = nextDirX;
+                lastDirZ = nextDirZ;
+            }
+        }
+        simplified.push(path[path.length - 1]);
+    } else {
+        // Should not happen if start/end are handled, but safe fallback
+        simplified.push(new THREE.Vector3(realStart.x, 0.5, realStart.z));
+    }
+
+    // Prepend Real Start and Append Real End to connect the visual path to the rack location
+    // Only if they are significantly different from grid points (usually yes)
+    if (realStart.distanceTo(simplified[0]) > 0.1) {
+        simplified.unshift(realStart);
+    }
+    if (realEnd.distanceTo(simplified[simplified.length - 1]) > 0.1) {
+        simplified.push(realEnd);
+    }
+
+    return simplified;
+};
+
+// --- COMPONENT ---
 
 const DoorMarker: React.FC<{ position: { x: number, y: number, z: number }, rotation: number, label: string }> = ({ position, rotation, label }) => {
     return (
@@ -85,7 +273,7 @@ const DoorMarker: React.FC<{ position: { x: number, y: number, z: number }, rota
     );
 };
 
-const RackUnit: React.FC<{ unit: Unit; colors: Record<string, string> }> = ({ unit, colors }) => {
+const RackUnit: React.FC<{ unit: Unit; colors: Record<string, string>; dimmed?: boolean }> = ({ unit, colors, dimmed }) => {
   const { levels, bays, size } = unit.params;
   const levelConfig = unit.params.levelConfig || [];
 
@@ -104,18 +292,24 @@ const RackUnit: React.FC<{ unit: Unit; colors: Record<string, string> }> = ({ un
 
   const typeColor = colors[unit.typeId] || '#999';
 
-  // Generate shelf plates (Solid)
+  const structuralMatProps = dimmed 
+    ? { transparent: true, opacity: 0.05, depthWrite: false } 
+    : { transparent: false, opacity: 1, depthWrite: true };
+    
+  const contentMatProps = dimmed 
+    ? { transparent: true, opacity: 0.1, depthWrite: false } 
+    : { transparent: false, opacity: 1, depthWrite: true, roughness: 0.4 };
+
   const shelves = [];
   for (let l = 0; l <= levels; l++) {
     shelves.push(
       <mesh key={`shelf-${l}`} position={[0, l * size, 0]}>
-        <boxGeometry args={[rackWidth, 0.05, rackDepth]} />
-        <meshLambertMaterial color="#546e7a" />
+        <boxGeometry args={[rackWidth, 0.08, rackDepth]} />
+        <meshStandardMaterial color="#455a64" roughness={0.5} metalness={0.5} {...structuralMatProps} />
       </mesh>
     );
   }
 
-  // Generate uprights (Pillars)
   const halfW = rackWidth / 2;
   const halfD = rackDepth / 2;
   const halfH = rackHeight / 2;
@@ -129,12 +323,11 @@ const RackUnit: React.FC<{ unit: Unit; colors: Record<string, string> }> = ({ un
 
   const uprights = uprightPositions.map((pos, idx) => (
     <mesh key={`u${idx}`} position={[pos[0], pos[1], pos[2]]}>
-      <boxGeometry args={[0.1, rackHeight, 0.1]} />
-      <meshLambertMaterial color="#37474f" />
+      <boxGeometry args={[0.15, rackHeight, 0.15]} />
+      <meshStandardMaterial color="#263238" roughness={0.8} {...structuralMatProps} />
     </mesh>
   ));
 
-  // Contents (Bins/Slots)
   const contents = [];
   for (let l = 0; l < levels; l++) {
      const currentLevelConfig = levelConfig[l] || { bays: bays, bins: unit.params.bins };
@@ -151,16 +344,10 @@ const RackUnit: React.FC<{ unit: Unit; colors: Record<string, string> }> = ({ un
            const z = -halfD + (d * binDepth) + (binDepth/2);
 
            contents.push(
-              <group key={`item-${l}-${b}-${d}`} position={[x, y, z]}>
-                 <mesh>
-                    <boxGeometry args={[bayWidth * 0.9, size * 0.8, binDepth * 0.9]} />
-                    <meshBasicMaterial color={typeColor} transparent opacity={0.15} depthWrite={false} />
-                 </mesh>
-                 <mesh>
-                     <boxGeometry args={[bayWidth * 0.9, size * 0.8, binDepth * 0.9]} />
-                     <meshBasicMaterial color={typeColor} wireframe transparent opacity={0.3} />
-                 </mesh>
-              </group>
+              <mesh key={`item-${l}-${b}-${d}`} position={[x, y, z]}>
+                 <boxGeometry args={[bayWidth * 0.9, size * 0.85, binDepth * 0.9]} />
+                 <meshStandardMaterial color={typeColor} {...contentMatProps} />
+              </mesh>
            );
         }
      }
@@ -175,7 +362,7 @@ const RackUnit: React.FC<{ unit: Unit; colors: Record<string, string> }> = ({ un
   );
 };
 
-const WarehouseContent: React.FC<SceneProps> = ({ visualLayout, layoutCoords, tasks, searchResults, focusedTaskIndex, activePathStart, visibleFloor }) => {
+const WarehouseContent: React.FC<SceneProps> = ({ visualLayout, layoutCoords, tasks, searchResults, focusedTaskIndex, activePathStart, visibleFloor, isHighlightActive, isZoomedIn }) => {
   const { camera } = useThree();
   const controlsRef = useRef<any>(null);
   
@@ -187,15 +374,93 @@ const WarehouseContent: React.FC<SceneProps> = ({ visualLayout, layoutCoords, ta
      return map;
   }, [visualLayout]);
 
-  // Handle Camera Movement when floor changes
+  // Pre-calculate Obstacles and Floor Bounds for A*
+  const floorPathingData = useMemo(() => {
+      if (!visualLayout) return new Map<number, FloorData>();
+      const map = new Map<number, FloorData>();
+
+      visualLayout.floors.forEach(floor => {
+          const units = visualLayout.units.filter(u => u.floorIndex === floor.id);
+          if (units.length === 0) return;
+
+          // 1. Calculate individual unit bounding boxes
+          const unitBoxes = units.map(u => {
+              // Calculate width/depth based on rotation
+              // Approx: 0 = Z is depth, 90 = X is depth
+              let maxBays = u.params.bays;
+              let maxBins = u.params.bins;
+              if (u.params.levelConfig) {
+                  maxBays = Math.max(...u.params.levelConfig.map(l => l.bays));
+                  maxBins = Math.max(...u.params.levelConfig.map(l => l.bins));
+              }
+              const w = maxBays * u.params.size;
+              const d = maxBins * u.params.size;
+              
+              // Simple rotation check (assuming increments of 90 deg)
+              const rot = Math.abs(u.rotY);
+              const isRotated = (Math.abs(rot - Math.PI/2) < 0.1 || Math.abs(rot - 3*Math.PI/2) < 0.1);
+              
+              const finalW = isRotated ? d : w;
+              const finalD = isRotated ? w : d;
+
+              return {
+                  minX: u.posX - finalW/2,
+                  maxX: u.posX + finalW/2,
+                  minZ: u.posZ - finalD/2,
+                  maxZ: u.posZ + finalD/2
+              };
+          });
+
+          // 2. Determine Overall Floor Bounds
+          let fMinX = Infinity, fMaxX = -Infinity, fMinZ = Infinity, fMaxZ = -Infinity;
+          unitBoxes.forEach(b => {
+              fMinX = Math.min(fMinX, b.minX);
+              fMaxX = Math.max(fMaxX, b.maxX);
+              fMinZ = Math.min(fMinZ, b.minZ);
+              fMaxZ = Math.max(fMaxZ, b.maxZ);
+          });
+
+          // 3. Extend "Wall" units
+          // If a unit is within this threshold of the total bounds, treat the gap as filled (wall).
+          const WALL_THRESHOLD = 3.0; // 3 meters
+          const EXTENSION = 20.0; // Push obstacle out significantly to form a boundary
+
+          const obstacles = unitBoxes.map(b => {
+              let { minX, maxX, minZ, maxZ } = b;
+              if (Math.abs(minX - fMinX) < WALL_THRESHOLD) minX -= EXTENSION;
+              if (Math.abs(maxX - fMaxX) < WALL_THRESHOLD) maxX += EXTENSION;
+              if (Math.abs(minZ - fMinZ) < WALL_THRESHOLD) minZ -= EXTENSION;
+              if (Math.abs(maxZ - fMaxZ) < WALL_THRESHOLD) maxZ += EXTENSION;
+              return { minX, maxX, minZ, maxZ };
+          });
+
+          map.set(floor.id, {
+              obstacles,
+              // Pathfinding bounds: add some margin around the floor area
+              bounds: { 
+                  minX: fMinX - 30, 
+                  maxX: fMaxX + 30, 
+                  minZ: fMinZ - 30, 
+                  maxZ: fMaxZ + 30 
+              }
+          });
+      });
+      return map;
+  }, [visualLayout]);
+
+  // Handle Camera Movement
   useEffect(() => {
     if (!visualLayout) return;
 
     let target = new THREE.Vector3(60, 0, 0);
     let pos = new THREE.Vector3(60, 100, 100);
 
-    if (visibleFloor !== null) {
-        // Calculate center of the visible floor units
+    if (isZoomedIn && focusedTaskIndex !== null && tasks[focusedTaskIndex]) {
+        const task = tasks[focusedTaskIndex];
+        const taskPos = new THREE.Vector3(task.coordinates.x, task.coordinates.y, task.coordinates.z);
+        target.copy(taskPos);
+        pos.set(taskPos.x + 10, taskPos.y + 10, taskPos.z + 10);
+    } else if (visibleFloor !== null) {
         const units = visualLayout.units.filter(u => u.floorIndex === visibleFloor);
         if (units.length > 0) {
              const xs = units.map(u => u.posX);
@@ -205,26 +470,22 @@ const WarehouseContent: React.FC<SceneProps> = ({ visualLayout, layoutCoords, ta
              const minZ = Math.min(...zs);
              const maxZ = Math.max(...zs);
              
-             target.set((minX + maxX) / 2, 0, (minZ + maxZ) / 2);
+             target.set((minX + maxX) / 2, -20, (minZ + maxZ) / 2);
              
-             // Dynamic zoom based on floor size - Significantly increased multipliers
              const sizeX = maxX - minX;
              const sizeZ = maxZ - minZ;
              const maxDim = Math.max(sizeX, sizeZ);
              
-             // Set camera position to frame the floor - Higher and further back
              pos.set(target.x, maxDim * 2.0 + 80, target.z + maxDim * 1.8 + 80);
         } else {
-             // Fallback using FLOORS definition if empty
              const f = FLOORS.find(fl => fl.id === visibleFloor);
              if(f) {
-                 target.set(f.start.x, 0, f.start.z);
+                 target.set(f.start.x, -20, f.start.z);
                  pos.set(f.start.x, 150, f.start.z + 150);
              }
         }
     } else {
-        // Center on whole warehouse (Default view)
-        target.set(60, 0, -10);
+        target.set(60, -20, -10);
         pos.set(60, 200, 200);
     }
 
@@ -233,13 +494,11 @@ const WarehouseContent: React.FC<SceneProps> = ({ visualLayout, layoutCoords, ta
         controlsRef.current.update();
     }
     
-    // Snap camera to new position
     camera.position.copy(pos);
     camera.lookAt(target);
 
-  }, [visibleFloor, visualLayout, camera]);
+  }, [visibleFloor, visualLayout, camera, isZoomedIn, focusedTaskIndex]);
 
-  // Dynamic Floor Generation
   const floorMeshes = useMemo(() => {
     if (!visualLayout) return [];
 
@@ -249,7 +508,6 @@ const WarehouseContent: React.FC<SceneProps> = ({ visualLayout, layoutCoords, ta
             const floorUnits = visualLayout.units.filter(u => u.floorIndex === floor.id);
             const floorDef = FLOORS.find(fl => fl.id === floor.id);
 
-            // Calculate bounding box including units AND the door
             let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
             
             if (floorUnits.length > 0) {
@@ -263,7 +521,6 @@ const WarehouseContent: React.FC<SceneProps> = ({ visualLayout, layoutCoords, ta
                 minX = 0; maxX = 50; minZ = 0; maxZ = 50;
             }
 
-            // Include Door in Bounding Box
             if (floorDef) {
                 minX = Math.min(minX, floorDef.start.x);
                 maxX = Math.max(maxX, floorDef.start.x);
@@ -271,8 +528,7 @@ const WarehouseContent: React.FC<SceneProps> = ({ visualLayout, layoutCoords, ta
                 maxZ = Math.max(maxZ, floorDef.start.z);
             }
 
-            // Add padding
-            const padding = 15; // Increased padding
+            const padding = 15;
             const width = (maxX - minX) + padding * 2;
             const depth = (maxZ - minZ) + padding * 2;
             const centerX = (minX + maxX) / 2;
@@ -283,13 +539,10 @@ const WarehouseContent: React.FC<SceneProps> = ({ visualLayout, layoutCoords, ta
 
             return (
                 <group key={floor.id}>
-                    {/* Floor Plane - Solid Black */}
                     <mesh rotation={[-Math.PI / 2, 0, 0]} position={[centerX, -0.1, centerZ]}>
                         <planeGeometry args={[finalWidth, finalDepth]} />
                         <meshBasicMaterial color="#000000" />
                     </mesh>
-                    
-                    {/* Floor Label */}
                     <Text 
                         position={[centerX, 0.2, minZ - 10]} 
                         rotation={[-Math.PI / 2, 0, 0]} 
@@ -304,13 +557,12 @@ const WarehouseContent: React.FC<SceneProps> = ({ visualLayout, layoutCoords, ta
     });
   }, [visualLayout, visibleFloor]);
 
-  // Filter Units based on visible floor
   const visibleUnits = useMemo(() => {
       if (!visualLayout) return [];
       return visualLayout.units.filter(u => visibleFloor === null || u.floorIndex === visibleFloor);
   }, [visualLayout, visibleFloor]);
 
-  // Path Calculation
+  // Path Calculation using A*
   const { activePath, futurePaths } = useMemo(() => {
     const active: THREE.Vector3[] = [];
     const future: THREE.Vector3[][] = [];
@@ -322,73 +574,87 @@ const WarehouseContent: React.FC<SceneProps> = ({ visualLayout, layoutCoords, ta
     const currentTask = tasks[focusedTaskIndex];
     if (!currentTask) return { activePath: [], futurePaths: [] };
 
-    // Only render active path if it belongs to the visible floor (or all floors visible)
     const isCurrentOnVisible = visibleFloor === null || currentTask.floorId === visibleFloor;
 
-    if (isCurrentOnVisible) {
-        if (activePathStart) {
-            active.push(new THREE.Vector3(activePathStart.x, activePathStart.y, activePathStart.z));
-            active.push(new THREE.Vector3(currentTask.coordinates.x, currentTask.coordinates.y, currentTask.coordinates.z));
-        }
+    // Helper to run A*
+    const generatePathSegment = (start: THREE.Vector3, end: THREE.Vector3, floorId: number) => {
+        return findPathAStar(start, end, floorPathingData.get(floorId));
+    };
+
+    // ACTIVE PATH
+    if (isCurrentOnVisible && activePathStart) {
+        const start = new THREE.Vector3(activePathStart.x, activePathStart.y, activePathStart.z);
+        const end = new THREE.Vector3(currentTask.coordinates.x, currentTask.coordinates.y, currentTask.coordinates.z);
+        // Use A* 
+        const segmentPoints = generatePathSegment(start, end, currentTask.floorId);
+        active.push(...segmentPoints);
     }
 
-    // Future Paths
-    let currentSegment: THREE.Vector3[] = [];
+    // FUTURE PATHS
+    let currentSegmentStart: THREE.Vector3 | null = null;
     
-    // Start loop
+    // Initialize start
     if (visibleFloor === null || currentTask.floorId === visibleFloor) {
-        currentSegment.push(new THREE.Vector3(currentTask.coordinates.x, currentTask.coordinates.y, currentTask.coordinates.z));
+        currentSegmentStart = new THREE.Vector3(currentTask.coordinates.x, currentTask.coordinates.y, currentTask.coordinates.z);
     }
 
     for (let i = focusedTaskIndex + 1; i < tasks.length; i++) {
+        const prevTask = tasks[i-1];
         const t = tasks[i];
         const isVisible = visibleFloor === null || t.floorId === visibleFloor;
         
         if (t.startNewSection) {
             // End previous segment
-            if (currentSegment.length > 1) future.push(currentSegment);
-            currentSegment = [];
+            currentSegmentStart = null; 
 
             if (isVisible) {
-                // Start a new segment from the door
+                // New segment from Door to Task
                 const floor = FLOORS.find(f => f.id === t.floorId) || FLOORS[0];
                 const doorPos = new THREE.Vector3(floor.start.x, floor.start.y, floor.start.z);
                 const taskPos = new THREE.Vector3(t.coordinates.x, t.coordinates.y, t.coordinates.z);
                 
-                // Door -> Task line
-                future.push([doorPos, taskPos]);
-                // Start segment for next items
-                currentSegment = [taskPos];
+                const segment = generatePathSegment(doorPos, taskPos, t.floorId);
+                future.push(segment);
+                
+                currentSegmentStart = taskPos;
             }
         } else {
-            // Continuation of same section
             if (isVisible) {
-                if (currentSegment.length > 0) {
-                    currentSegment.push(new THREE.Vector3(t.coordinates.x, t.coordinates.y, t.coordinates.z));
-                } else {
-                    currentSegment.push(new THREE.Vector3(t.coordinates.x, t.coordinates.y, t.coordinates.z));
-                }
+                const startPos = currentSegmentStart || new THREE.Vector3(prevTask.coordinates.x, prevTask.coordinates.y, prevTask.coordinates.z);
+                const endPos = new THREE.Vector3(t.coordinates.x, t.coordinates.y, t.coordinates.z);
+                
+                const intermediate = generatePathSegment(startPos, endPos, t.floorId);
+                
+                // For future paths, we just push the whole calculated segment as a separate line to avoid complex merging logic
+                // that might look weird with A* simplifications
+                future.push(intermediate);
+                
+                currentSegmentStart = endPos;
             } else {
-                if (currentSegment.length > 1) future.push(currentSegment);
-                currentSegment = [];
+                currentSegmentStart = null;
             }
         }
     }
-    if (currentSegment.length > 1) future.push(currentSegment);
 
     return { activePath: active, futurePaths: future };
-  }, [tasks, focusedTaskIndex, activePathStart, visibleFloor]);
+  }, [tasks, focusedTaskIndex, activePathStart, visibleFloor, floorPathingData]);
 
   return (
     <>
-      <OrbitControls ref={controlsRef} makeDefault dampingFactor={0.1} />
+      <OrbitControls 
+        ref={controlsRef} 
+        makeDefault 
+        dampingFactor={0.1} 
+        enablePan={false} 
+        maxPolarAngle={Math.PI / 2} 
+      />
       <ambientLight intensity={0.7} />
       <pointLight position={[0, 50, 0]} intensity={0.5} />
       <directionalLight position={[100, 100, 50]} intensity={0.8} castShadow />
 
       {floorMeshes}
 
-      {/* Render Doors (Filtered) */}
+      {/* Render Doors */}
       {FLOORS.filter(f => visibleFloor === null || f.id === visibleFloor).map(floor => (
           <DoorMarker 
             key={`door-${floor.id}`} 
@@ -399,10 +665,10 @@ const WarehouseContent: React.FC<SceneProps> = ({ visualLayout, layoutCoords, ta
       ))}
 
       {visibleUnits.map((unit) => (
-         <RackUnit key={unit.id} unit={unit} colors={typeColors} />
+         <RackUnit key={unit.id} unit={unit} colors={typeColors} dimmed={isHighlightActive} />
       ))}
 
-      {/* Picking Tasks Highlights (Filtered) */}
+      {/* Tasks */}
       {tasks.map((task, idx) => {
         if (visibleFloor !== null && task.floorId !== visibleFloor) return null;
 
@@ -412,6 +678,16 @@ const WarehouseContent: React.FC<SceneProps> = ({ visualLayout, layoutCoords, ta
         
         return (
           <group key={`task-${idx}`} position={[task.coordinates.x, task.coordinates.y, task.coordinates.z]}>
+             {isFocused && isHighlightActive && (
+                 <group>
+                     <pointLight distance={15} intensity={5} color="#00e676" decay={2} />
+                     <mesh>
+                         <sphereGeometry args={[2.5, 32, 32]} />
+                         <meshBasicMaterial color="#00e676" transparent opacity={0.15} depthWrite={false} />
+                     </mesh>
+                 </group>
+             )}
+
              <mesh position={[0, 0, 0]} scale={[scale, scale, scale]}>
               <boxGeometry args={[0.5, 0.5, 0.5]} />
               <meshStandardMaterial 
@@ -451,27 +727,27 @@ const WarehouseContent: React.FC<SceneProps> = ({ visualLayout, layoutCoords, ta
          )
       })}
 
-      {/* Render Active Path (Glowing Green) */}
+      {/* Render Active Path */}
       {activePath.length > 1 && (
           <Line
             points={activePath}
-            color="#00e676" // Green
-            lineWidth={6}
+            color="#00e676"
+            lineWidth={3}
             transparent
-            opacity={0.8}
+            opacity={0.6}
             toneMapped={false} 
           />
       )}
 
-      {/* Render Future Paths (Yellow, dimmed) */}
+      {/* Render Future Paths */}
       {futurePaths.map((points, i) => (
          points.length > 1 && (
             <Line
               key={`line-${i}`}
               points={points}
               color="#ffff00"
-              lineWidth={3}
-              opacity={0.4}
+              lineWidth={1} 
+              opacity={0.2}
               transparent
               dashed={false}
             />
