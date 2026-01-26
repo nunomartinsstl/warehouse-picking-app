@@ -97,7 +97,7 @@ export interface User {
   email: string;
   firstName: string;
   lastName: string;
-  role: string; // 'ADMIN', 'MANAGEMENT', 'WAREHOUSE'
+  role: string; // 'ADMIN', 'LOGISTICA'
   companyId: string; // "1" = AVAC, "2" = HOTELARIA
 }
 

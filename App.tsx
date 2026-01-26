@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { PickerInterface } from './components/PickerInterface';
 import { ManagerPlatform } from './components/ManagerPlatform';
-import { Lock, Briefcase, ArrowRight, ArrowLeft, Building2, Package, Mail, LogIn, Loader2, LogOut, User as UserIcon } from 'lucide-react';
+import { Lock, ArrowRight, ArrowLeft, Mail, LogIn, Loader2, LogOut, User as UserIcon } from 'lucide-react';
 import { authenticateUser, auth, fetchUserProfile, signOutUser } from './utils/firebase';
 import { User as UserType } from './types';
 import { onAuthStateChanged } from 'firebase/auth';
@@ -18,6 +18,10 @@ const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<UserType | null>(null);
   
   const [view, setView] = useState<'picker' | 'manager'>('picker');
+  
+  // Logo State
+  const [logoError, setLogoError] = useState(false);
+  const logoUrl = "https://mainpage.pt/wp-content/uploads/2024/11/logo-mainpage-vertical.svg";
 
   // Guard to prevent auto-login logic from firing during manual login process
   const isManualLogin = useRef(false);
@@ -112,14 +116,27 @@ const App: React.FC = () => {
   if (authStage === 'company_select') {
     return (
       <div className="w-full h-screen bg-[#0f131a] text-white flex flex-col items-center justify-center p-6 font-sans">
-        <div className="mb-12 text-center">
-            <div className="flex justify-center mb-4">
-                <div className="bg-[#0277bd]/20 p-4 rounded-full border border-[#0277bd]/50">
-                    <Package size={48} className="text-[#4fc3f7]" />
-                </div>
+        <div className="mb-12 text-center w-full max-w-md">
+            <div className="flex justify-center mb-6">
+                {!logoError ? (
+                  <img 
+                    src={logoUrl}
+                    alt="Company Logo" 
+                    // ADDED: brightness-0 invert makes the logo pure white
+                    className="h-32 max-w-full object-contain brightness-0 invert"
+                    onError={() => setLogoError(true)}
+                  />
+                ) : (
+                  <div className="flex flex-col items-center">
+                    <div className="bg-[#0277bd]/20 p-4 rounded-full border border-[#0277bd]/50 mb-4">
+                        <span className="text-[#4fc3f7] font-black text-3xl tracking-tighter">SA</span>
+                    </div>
+                    <h1 className="text-3xl font-bold tracking-widest text-[#2c52ad]">SETLING</h1>
+                  </div>
+                )}
             </div>
-            <h1 className="text-3xl font-bold tracking-widest text-[#2c52ad]">SETLING</h1>
-            <p className="text-[#4fc3f7] tracking-widest text-sm font-bold opacity-80">WAREHOUSE OPERATIONS</p>
+            
+            <p className="text-[#4fc3f7] tracking-widest text-sm font-bold opacity-80">PICKING DE ARMAZÉM</p>
         </div>
         
         <div className="w-full max-w-sm space-y-4">
@@ -130,12 +147,11 @@ const App: React.FC = () => {
             className="w-full bg-[#1e2736] hover:bg-[#263238] border border-[#37474f] hover:border-[#4fc3f7] p-6 rounded-xl shadow-lg flex items-center justify-between group transition-all"
           >
             <div className="flex items-center gap-4">
-              <div className="bg-[#4fc3f7]/10 p-3 rounded-lg">
-                 <Building2 size={24} className="text-[#4fc3f7]" />
+              <div className="bg-[#4fc3f7]/10 p-3 rounded-lg w-14 h-14 flex items-center justify-center">
+                 <span className="text-[#4fc3f7] font-black text-2xl tracking-tighter">SA</span>
               </div>
               <div className="text-left">
                   <div className="font-bold text-lg text-white">SETLING AVAC</div>
-                  <div className="text-xs text-gray-400">Logística & Picking</div>
               </div>
             </div>
             <ArrowRight className="text-[#4fc3f7] opacity-0 group-hover:opacity-100 transition-opacity" />
@@ -146,19 +162,18 @@ const App: React.FC = () => {
             className="w-full bg-[#1e2736] hover:bg-[#263238] border border-[#37474f] hover:border-[#00e676] p-6 rounded-xl shadow-lg flex items-center justify-between group transition-all"
           >
             <div className="flex items-center gap-4">
-               <div className="bg-[#00e676]/10 p-3 rounded-lg">
-                 <Briefcase size={24} className="text-[#00e676]" />
+               <div className="bg-[#00e676]/10 p-3 rounded-lg w-14 h-14 flex items-center justify-center">
+                 <span className="text-[#00e676] font-black text-2xl tracking-tighter">SH</span>
                </div>
               <div className="text-left">
                   <div className="font-bold text-lg text-white">SETLING HOTELARIA</div>
-                  <div className="text-xs text-gray-400">Hotelaria & Equipamentos</div>
               </div>
             </div>
             <ArrowRight className="text-[#00e676] opacity-0 group-hover:opacity-100 transition-opacity" />
           </button>
         </div>
         
-        <div className="absolute bottom-6 text-gray-600 text-xs">v1.3.1</div>
+        <div className="absolute bottom-6 text-gray-600 text-xs">v1.3.2</div>
       </div>
     );
   }
@@ -172,6 +187,13 @@ const App: React.FC = () => {
           </button>
           
           <div className="text-center mb-8">
+              {!logoError && (
+                  <div className="flex justify-center mb-4">
+                      {/* ADDED: brightness-0 invert makes the logo pure white, opacity-90 for slight blend */}
+                      <img src={logoUrl} alt="Logo" className="h-12 w-auto object-contain opacity-90 brightness-0 invert" />
+                  </div>
+              )}
+              
               <div className="inline-block px-3 py-1 rounded-full bg-[#37474f] text-xs text-gray-300 font-bold mb-4">
                   {selectedCompany?.name}
               </div>
@@ -231,8 +253,19 @@ const App: React.FC = () => {
   // --- APP LAYOUT ---
   return (
       <div className="relative w-full h-full">
-          {/* Logout Button (Absolute top-right for quick access in development/prod) */}
-          <div className="fixed top-4 right-4 z-[100]">
+          {/* Header Buttons (Absolute top-right for quick access in development/prod) */}
+          <div className="fixed top-4 right-4 z-[100] flex items-center gap-3">
+              {selectedCompany && (
+                <div className={`
+                    px-3 py-1 rounded-lg border backdrop-blur-md font-black text-lg tracking-tighter shadow-lg
+                    ${selectedCompany.id === '1' 
+                        ? 'bg-[#4fc3f7]/20 border-[#4fc3f7]/50 text-[#4fc3f7]' 
+                        : 'bg-[#00e676]/20 border-[#00e676]/50 text-[#00e676]'}
+                `}>
+                    {selectedCompany.id === '1' ? 'SA' : 'SH'}
+                </div>
+              )}
+
               <button 
                 onClick={handleLogout}
                 className="bg-red-900/80 hover:bg-red-900 text-red-100 p-2 rounded-full border border-red-700/50 shadow-lg backdrop-blur-sm transition-all"

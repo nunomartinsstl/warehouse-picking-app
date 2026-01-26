@@ -1,4 +1,3 @@
-
 {
   "name": "Warehouse Picker",
   "short_name": "Picker",
@@ -9,9 +8,9 @@
   "orientation": "portrait",
   "icons": [
     {
-      "src": "https://cdn-icons-png.flaticon.com/512/6009/6009864.png",
-      "sizes": "512x512",
-      "type": "image/png"
+      "src": "https://mainpage.pt/wp-content/uploads/2024/11/logo-mainpage-vertical.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
     }
   ]
 }

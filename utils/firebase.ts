@@ -91,8 +91,16 @@ export const authenticateUser = async (identifier: string, password: string, tar
         const user = await fetchUserProfile(uid);
 
         // 3. Check Permissions
+        const userRole = (user.role || '').toUpperCase();
+        const allowedRoles = ['ADMIN', 'LOGISTICA', 'LOGÍSTICA'];
+        
+        if (!allowedRoles.includes(userRole)) {
+            await signOut(auth);
+            throw new Error("Acesso negado. Apenas perfil 'Admin' ou 'Logística'.");
+        }
+
         // Admin has access to all companies. Others must match companyId.
-        if (user.role !== 'ADMIN' && user.companyId !== targetCompanyId) {
+        if (userRole !== 'ADMIN' && user.companyId !== targetCompanyId) {
             await signOut(auth); // Security: Kill session immediately if they don't belong here
             throw new Error("Não tem permissão para aceder a esta empresa.");
         }
