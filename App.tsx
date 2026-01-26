@@ -1,27 +1,115 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { PickerInterface } from './components/PickerInterface';
 import { ManagerPlatform } from './components/ManagerPlatform';
-import { Lock, Briefcase, ArrowRight, ArrowLeft, Building2, Package } from 'lucide-react';
+import { Lock, Briefcase, ArrowRight, ArrowLeft, Building2, Package, Mail, LogIn, Loader2, LogOut, User as UserIcon } from 'lucide-react';
+import { authenticateUser, auth, fetchUserProfile, signOutUser } from './utils/firebase';
+import { User as UserType } from './types';
+import { onAuthStateChanged } from 'firebase/auth';
 
 const App: React.FC = () => {
-  const [authStage, setAuthStage] = useState<'landing' | 'password' | 'app'>('landing');
+  const [authStage, setAuthStage] = useState<'loading' | 'company_select' | 'login' | 'app'>('loading');
+  const [selectedCompany, setSelectedCompany] = useState<{id: string, name: string} | null>(null);
+  
+  // Login Form State
+  const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [currentUser, setCurrentUser] = useState<UserType | null>(null);
   
   const [view, setView] = useState<'picker' | 'manager'>('picker');
 
-  const handleLogin = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (password === '1234') {
-      setAuthStage('app');
-      setView('picker');
-    } else {
-      setError('Senha incorreta');
+  // Guard to prevent auto-login logic from firing during manual login process
+  const isManualLogin = useRef(false);
+
+  // --- AUTO LOGIN & PERSISTENCE ---
+  useEffect(() => {
+      // 1. Check LocalStorage for last email
+      const lastEmail = localStorage.getItem('setling_last_email');
+      if (lastEmail) setIdentifier(lastEmail);
+
+      // 2. Listen for Firebase Auth Session
+      const unsubscribe = onAuthStateChanged(auth, async (user) => {
+          // If we are performing a manual login, let handleLogin function control the flow
+          if (isManualLogin.current) return;
+
+          if (user) {
+              // User is already signed in (session persisted)
+              try {
+                  const dbUser = await fetchUserProfile(user.uid);
+                  setCurrentUser(dbUser);
+                  
+                  // Auto-set company based on profile
+                  const companyName = dbUser.companyId === '1' ? 'SETLING AVAC' : 'SETLING HOTELARIA';
+                  setSelectedCompany({ id: dbUser.companyId, name: companyName });
+                  
+                  setAuthStage('app');
+              } catch (err) {
+                  console.error("Auto-login failed:", err);
+                  // Force logout if profile is invalid
+                  await signOutUser();
+                  setAuthStage('company_select');
+              }
+          } else {
+              setAuthStage('company_select');
+          }
+      });
+
+      return () => unsubscribe();
+  }, []);
+
+  const handleCompanySelect = (id: string, name: string) => {
+      setSelectedCompany({ id, name });
+      setAuthStage('login');
+      setError('');
+      // Leave identifier pre-filled if it exists
       setPassword('');
+  };
+
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedCompany) return;
+    if (!password) {
+        setError('Por favor, introduza a password.');
+        return;
+    }
+
+    setIsLoading(true);
+    setError('');
+    isManualLogin.current = true; // Lock listener
+
+    try {
+        // Pass password to authenticateUser
+        const user = await authenticateUser(identifier, password, selectedCompany.id);
+        setCurrentUser(user);
+        setAuthStage('app');
+        setView('picker');
+    } catch (err: any) {
+        console.error(err);
+        setError(err.message || "Erro ao efetuar login. Verifique as credenciais.");
+    } finally {
+        setIsLoading(false);
+        isManualLogin.current = false; // Unlock listener
     }
   };
 
-  if (authStage === 'landing') {
+  const handleLogout = async () => {
+      await signOutUser();
+      setCurrentUser(null);
+      setSelectedCompany(null);
+      setAuthStage('company_select');
+      setView('picker');
+  };
+
+  if (authStage === 'loading') {
+      return (
+          <div className="w-full h-screen bg-[#0f131a] flex items-center justify-center text-[#4fc3f7]">
+              <Loader2 className="animate-spin w-10 h-10" />
+          </div>
+      );
+  }
+
+  if (authStage === 'company_select') {
     return (
       <div className="w-full h-screen bg-[#0f131a] text-white flex flex-col items-center justify-center p-6 font-sans">
         <div className="mb-12 text-center">
@@ -30,17 +118,21 @@ const App: React.FC = () => {
                     <Package size={48} className="text-[#4fc3f7]" />
                 </div>
             </div>
-            {/* Branding Color Updated */}
             <h1 className="text-3xl font-bold tracking-widest text-[#2c52ad]">SETLING</h1>
             <p className="text-[#4fc3f7] tracking-widest text-sm font-bold opacity-80">WAREHOUSE OPERATIONS</p>
         </div>
         
         <div className="w-full max-w-sm space-y-4">
+          <p className="text-center text-gray-500 text-xs uppercase font-bold tracking-wider mb-2">Selecione a Empresa</p>
+          
           <button 
-            onClick={() => setAuthStage('password')}
+            onClick={() => handleCompanySelect("1", "SETLING AVAC")}
             className="w-full bg-[#1e2736] hover:bg-[#263238] border border-[#37474f] hover:border-[#4fc3f7] p-6 rounded-xl shadow-lg flex items-center justify-between group transition-all"
           >
             <div className="flex items-center gap-4">
+              <div className="bg-[#4fc3f7]/10 p-3 rounded-lg">
+                 <Building2 size={24} className="text-[#4fc3f7]" />
+              </div>
               <div className="text-left">
                   <div className="font-bold text-lg text-white">SETLING AVAC</div>
                   <div className="text-xs text-gray-400">Logística & Picking</div>
@@ -50,59 +142,85 @@ const App: React.FC = () => {
           </button>
 
           <button 
-            onClick={() => alert("Módulo em desenvolvimento.")}
-            className="w-full bg-[#141923] border border-[#37474f] p-6 rounded-xl shadow-lg flex items-center justify-between opacity-50 cursor-not-allowed"
+            onClick={() => handleCompanySelect("2", "SETLING HOTELARIA")}
+            className="w-full bg-[#1e2736] hover:bg-[#263238] border border-[#37474f] hover:border-[#00e676] p-6 rounded-xl shadow-lg flex items-center justify-between group transition-all"
           >
             <div className="flex items-center gap-4">
+               <div className="bg-[#00e676]/10 p-3 rounded-lg">
+                 <Briefcase size={24} className="text-[#00e676]" />
+               </div>
               <div className="text-left">
-                  <div className="font-bold text-lg text-gray-400">SETLING HOTELARIA</div>
-                  <div className="text-xs text-gray-600">Brevemente</div>
+                  <div className="font-bold text-lg text-white">SETLING HOTELARIA</div>
+                  <div className="text-xs text-gray-400">Hotelaria & Equipamentos</div>
               </div>
             </div>
+            <ArrowRight className="text-[#00e676] opacity-0 group-hover:opacity-100 transition-opacity" />
           </button>
         </div>
         
-        <div className="absolute bottom-6 text-gray-600 text-xs">v1.2.0</div>
+        <div className="absolute bottom-6 text-gray-600 text-xs">v1.3.1</div>
       </div>
     );
   }
 
-  if (authStage === 'password') {
+  if (authStage === 'login') {
     return (
       <div className="w-full h-screen bg-[#0f131a] text-white flex flex-col items-center justify-center p-6 font-sans">
         <div className="w-full max-w-xs">
-          <button onClick={() => { setAuthStage('landing'); setPassword(''); setError(''); }} className="mb-8 text-gray-400 hover:text-white flex items-center gap-2 transition-colors">
+          <button onClick={() => { setAuthStage('company_select'); setPassword(''); setError(''); }} className="mb-8 text-gray-400 hover:text-white flex items-center gap-2 transition-colors">
             <ArrowLeft size={20} /> <span className="text-sm font-bold">Voltar</span>
           </button>
           
-          <h2 className="text-2xl font-bold mb-2 text-center text-white">Acesso Reservado</h2>
-          <p className="text-gray-400 text-center mb-8 text-sm">Introduza o código de acesso para AVAC</p>
+          <div className="text-center mb-8">
+              <div className="inline-block px-3 py-1 rounded-full bg-[#37474f] text-xs text-gray-300 font-bold mb-4">
+                  {selectedCompany?.name}
+              </div>
+              <h2 className="text-2xl font-bold text-white">Autenticação</h2>
+          </div>
           
-          <form onSubmit={handleLogin} className="space-y-6">
-            <div>
-              <input 
-                type="password" 
-                inputMode="numeric"
-                pattern="[0-9]*"
-                value={password}
-                onChange={(e) => { setPassword(e.target.value); setError(''); }}
-                placeholder="PIN"
-                className="w-full bg-[#1e2736] border border-[#37474f] rounded-xl p-4 text-center text-3xl font-bold tracking-[0.5em] text-white focus:border-[#4fc3f7] focus:outline-none transition-colors placeholder:tracking-normal placeholder:text-base placeholder:font-normal placeholder:text-gray-600"
-                autoFocus
-              />
+          <form onSubmit={handleLogin} className="space-y-4">
+            <div className="space-y-1">
+                <label className="text-xs text-gray-500 uppercase font-bold ml-1">Utilizador / Email</label>
+                <div className="relative">
+                    <UserIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500" size={18} />
+                    <input 
+                        type="text" 
+                        value={identifier}
+                        onChange={(e) => setIdentifier(e.target.value)}
+                        placeholder="Nome de utilizador ou Email"
+                        className="w-full bg-[#1e2736] border border-[#37474f] rounded-xl pl-10 p-3 text-white focus:border-[#4fc3f7] focus:outline-none transition-colors"
+                        autoFocus
+                    />
+                </div>
+            </div>
+
+            <div className="space-y-1">
+                <label className="text-xs text-gray-500 uppercase font-bold ml-1">Password</label>
+                <div className="relative">
+                    <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500" size={18} />
+                    <input 
+                        type="password" 
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        placeholder="••••"
+                        className="w-full bg-[#1e2736] border border-[#37474f] rounded-xl pl-10 p-3 text-white focus:border-[#4fc3f7] focus:outline-none transition-colors"
+                    />
+                </div>
             </div>
             
             {error && (
-                <div className="bg-red-500/10 border border-red-500/50 text-red-400 text-center text-sm p-3 rounded-lg">
+                <div className="bg-red-500/10 border border-red-500/50 text-red-400 text-center text-sm p-3 rounded-lg animate-pulse">
                     {error}
                 </div>
             )}
             
             <button 
               type="submit"
-              className="w-full bg-[#00e676] hover:bg-[#00c853] text-black font-bold py-4 rounded-xl shadow-lg shadow-green-900/20 flex justify-center items-center gap-2 transition-transform active:scale-95"
+              disabled={isLoading}
+              className="w-full bg-[#00e676] hover:bg-[#00c853] text-black font-bold py-4 rounded-xl shadow-lg shadow-green-900/20 flex justify-center items-center gap-2 transition-transform active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <Lock size={18} /> ENTRAR
+              {isLoading ? <Loader2 className="animate-spin" /> : <LogIn size={18} />} 
+              ENTRAR
             </button>
           </form>
         </div>
@@ -110,11 +228,27 @@ const App: React.FC = () => {
     );
   }
 
-  if (view === 'manager') {
-    return <ManagerPlatform onBack={() => setView('picker')} />;
-  }
+  // --- APP LAYOUT ---
+  return (
+      <div className="relative w-full h-full">
+          {/* Logout Button (Absolute top-right for quick access in development/prod) */}
+          <div className="fixed top-4 right-4 z-[100]">
+              <button 
+                onClick={handleLogout}
+                className="bg-red-900/80 hover:bg-red-900 text-red-100 p-2 rounded-full border border-red-700/50 shadow-lg backdrop-blur-sm transition-all"
+                title="Sair"
+              >
+                  <LogOut size={20} />
+              </button>
+          </div>
 
-  return <PickerInterface onSwitchToManager={() => setView('manager')} />;
+          {view === 'manager' ? (
+             <ManagerPlatform onBack={() => setView('picker')} />
+          ) : (
+             <PickerInterface onSwitchToManager={() => setView('manager')} />
+          )}
+      </div>
+  );
 };
 
 export default App;

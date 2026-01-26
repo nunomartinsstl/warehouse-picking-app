@@ -90,6 +90,17 @@ export interface ProcessedData {
   orders: OrderItem[];
 }
 
+// --- USER TYPES ---
+export interface User {
+  uid: string;
+  username: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+  role: string; // 'ADMIN', 'MANAGEMENT', 'WAREHOUSE'
+  companyId: string; // "1" = AVAC, "2" = HOTELARIA
+}
+
 // --- CLOUD TYPES ---
 export type OrderStatus = 'OPEN' | 'IN PROCESS' | 'COMPLETED';
 

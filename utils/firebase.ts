@@ -1,6 +1,7 @@
 import { initializeApp } from 'firebase/app';
-import { getDatabase, ref, get, child, update, set, push, remove } from 'firebase/database';
-import { StockItem, OrderItem, CloudOrder, PickingTask } from '../types';
+import { getDatabase, ref, get, child, update, set, push, remove, query, orderByChild, equalTo } from 'firebase/database';
+import { getAuth, signInWithEmailAndPassword, signOut } from 'firebase/auth';
+import { StockItem, OrderItem, CloudOrder, PickingTask, User } from '../types';
 
 // --- FIREBASE CONFIGURATION ---
 const firebaseConfig = {
@@ -15,6 +16,7 @@ const firebaseConfig = {
 
 // Initialize Firebase
 let db: any = null;
+let auth: any = null;
 let initError: string | null = null;
 
 try {
@@ -23,12 +25,16 @@ try {
     // CRITICAL FIX: Explicitly pass the URL to getDatabase. 
     // This is required for databases hosted in 'europe-west1' to bypass region auto-detection failures.
     db = getDatabase(app, firebaseConfig.databaseURL); 
+    auth = getAuth(app);
     
     console.log("Firebase initialized. Connected to:", firebaseConfig.databaseURL);
 } catch (e: any) {
     console.error("Firebase init error:", e);
     initError = e.message || "Unknown Firebase initialization error";
 }
+
+// Export auth for App.tsx to use in onAuthStateChanged
+export { auth };
 
 // Helper to check DB status
 const ensureDb = () => {
@@ -37,6 +43,78 @@ const ensureDb = () => {
         throw new Error("Base de dados não inicializada. Verifique a configuração.");
     }
     return db;
+};
+
+// --- AUTHENTICATION FUNCTIONS ---
+
+export const signOutUser = async () => {
+    if (auth) {
+        await signOut(auth);
+    }
+};
+
+export const fetchUserProfile = async (uid: string): Promise<User> => {
+    const database = ensureDb();
+    const snapshot = await get(child(ref(database), `nexus_users/${uid}`));
+    if (!snapshot.exists()) {
+        throw new Error("Perfil de utilizador não encontrado.");
+    }
+    return snapshot.val() as User;
+};
+
+export const authenticateUser = async (identifier: string, password: string, targetCompanyId: string): Promise<User> => {
+    const database = ensureDb();
+    
+    if (!auth) throw new Error("Serviço de autenticação não inicializado.");
+
+    try {
+        let emailToAuth = identifier;
+
+        // LOCAL STORAGE USERNAME LOOKUP
+        // Since DB rules prevent looking up username->email for unauthenticated users,
+        // we check if this device remembers the mapping from a previous successful login.
+        if (!identifier.includes('@')) {
+             const storedEmail = localStorage.getItem(`usermap_${identifier.toLowerCase()}`);
+             if (storedEmail) {
+                 console.log(`Resolved username '${identifier}' to '${storedEmail}' via local cache.`);
+                 emailToAuth = storedEmail;
+             } else {
+                 throw new Error("Nome de utilizador desconhecido neste dispositivo. Por favor use o Email na primeira vez.");
+             }
+        }
+
+        // 1. Authenticate with Firebase Auth
+        const userCredential = await signInWithEmailAndPassword(auth, emailToAuth, password);
+        const uid = userCredential.user.uid;
+
+        // 2. Fetch User Profile
+        const user = await fetchUserProfile(uid);
+
+        // 3. Check Permissions
+        // Admin has access to all companies. Others must match companyId.
+        if (user.role !== 'ADMIN' && user.companyId !== targetCompanyId) {
+            await signOut(auth); // Security: Kill session immediately if they don't belong here
+            throw new Error("Não tem permissão para aceder a esta empresa.");
+        }
+        
+        // 4. Save Username Mapping for future logins
+        if (user.username) {
+            localStorage.setItem(`usermap_${user.username.toLowerCase()}`, user.email);
+        }
+        // Save Last Email for convenience
+        localStorage.setItem('setling_last_email', user.email);
+
+        return user;
+    } catch (e: any) {
+        console.error("Auth error:", e);
+        if (e.code === 'auth/invalid-credential' || e.code === 'auth/wrong-password' || e.code === 'auth/invalid-email') {
+            throw new Error("Credenciais inválidas.");
+        }
+        if (e.code === 'auth/user-not-found') {
+             throw new Error("Utilizador não encontrado.");
+        }
+        throw e;
+    }
 };
 
 // --- STOCK FUNCTIONS ---
