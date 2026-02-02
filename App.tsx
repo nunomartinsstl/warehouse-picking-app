@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { PickerInterface } from './components/PickerInterface';
 import { ManagerPlatform } from './components/ManagerPlatform';
-import { Lock, ArrowRight, ArrowLeft, Mail, LogIn, Loader2, LogOut, User as UserIcon, Eye, EyeOff, Sun, Moon } from 'lucide-react';
+import { Lock, ArrowRight, ArrowLeft, Mail, LogIn, Loader2, LogOut, User as UserIcon, Eye, EyeOff } from 'lucide-react';
 import { authenticateUser, auth, fetchUserProfile, signOutUser } from './utils/firebase';
 import { User as UserType } from './types';
 
@@ -21,13 +21,6 @@ const App: React.FC = () => {
   
   // Logo State
   const [logoError, setLogoError] = useState(false);
-  
-  // Theme State
-  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
-      const saved = localStorage.getItem('setling_theme');
-      if (saved === 'light' || saved === 'dark') return saved;
-      return window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
-  });
 
   // Updated Logo URLs
   const logoUrl = "https://setling.pt/wp-content/uploads/2024/07/setling-logo-white-110.svg";
@@ -36,21 +29,6 @@ const App: React.FC = () => {
 
   // Guard to prevent auto-login logic from firing during manual login process
   const isManualLogin = useRef(false);
-
-  // --- THEME EFFECT ---
-  useEffect(() => {
-      const root = window.document.documentElement;
-      if (theme === 'dark') {
-          root.classList.add('dark');
-      } else {
-          root.classList.remove('dark');
-      }
-      localStorage.setItem('setling_theme', theme);
-  }, [theme]);
-
-  const toggleTheme = () => {
-      setTheme(prev => prev === 'dark' ? 'light' : 'dark');
-  };
 
   // --- AUTO LOGIN & PERSISTENCE ---
   useEffect(() => {
@@ -135,7 +113,7 @@ const App: React.FC = () => {
 
   if (authStage === 'loading') {
       return (
-          <div className="w-full h-screen bg-gray-50 dark:bg-[#0f131a] flex items-center justify-center text-[#4fc3f7] transition-colors">
+          <div className="w-full h-screen bg-gray-50 flex items-center justify-center text-[#4fc3f7]">
               <Loader2 className="animate-spin w-10 h-10" />
           </div>
       );
@@ -143,15 +121,7 @@ const App: React.FC = () => {
 
   if (authStage === 'company_select') {
     return (
-      <div className="w-full h-screen bg-gray-50 dark:bg-[#0f131a] text-gray-900 dark:text-white flex flex-col items-center justify-center p-6 font-sans transition-colors">
-        {/* Theme Toggle Top Right */}
-        <button 
-            onClick={toggleTheme}
-            className="absolute top-4 right-4 p-2 rounded-full bg-gray-200 dark:bg-white/10 hover:bg-gray-300 dark:hover:bg-white/20 text-gray-600 dark:text-gray-300 transition-colors"
-        >
-            {theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
-        </button>
-
+      <div className="w-full h-screen bg-gray-50 text-gray-900 flex flex-col items-center justify-center p-6 font-sans">
         <div className="mb-12 text-center w-full max-w-md">
             <div className="flex justify-center mb-6">
                 {!logoError ? (
@@ -159,7 +129,7 @@ const App: React.FC = () => {
                     src={logoUrl}
                     alt="Company Logo" 
                     // Invert in light mode because original is white
-                    className="h-24 max-w-full object-contain invert dark:invert-0 transition-all"
+                    className="h-24 max-w-full object-contain invert transition-all"
                     onError={() => setLogoError(true)}
                   />
                 ) : (
@@ -180,14 +150,14 @@ const App: React.FC = () => {
           
           <button 
             onClick={() => handleCompanySelect("1", "SETLING AVAC")}
-            className="w-full bg-white dark:bg-[#1e2736] hover:bg-gray-100 dark:hover:bg-[#263238] border border-gray-200 dark:border-[#37474f] hover:border-[#4fc3f7] p-6 rounded-xl shadow-lg flex items-center justify-between group transition-all"
+            className="w-full bg-white hover:bg-gray-100 border border-gray-200 hover:border-[#4fc3f7] p-6 rounded-xl shadow-lg flex items-center justify-between group transition-all"
           >
             <div className="flex items-center gap-4">
               <div className="bg-[#4fc3f7]/10 p-3 rounded-lg w-14 h-14 flex items-center justify-center">
                  <span className="text-[#4fc3f7] font-black text-2xl tracking-tighter">SA</span>
               </div>
               <div className="text-left">
-                  <div className="font-bold text-lg text-gray-900 dark:text-white">SETLING AVAC</div>
+                  <div className="font-bold text-lg text-gray-900">SETLING AVAC</div>
               </div>
             </div>
             <ArrowRight className="text-[#4fc3f7] opacity-0 group-hover:opacity-100 transition-opacity" />
@@ -195,65 +165,57 @@ const App: React.FC = () => {
 
           <button 
             onClick={() => handleCompanySelect("2", "SETLING HOTELARIA")}
-            className="w-full bg-white dark:bg-[#1e2736] hover:bg-gray-100 dark:hover:bg-[#263238] border border-gray-200 dark:border-[#37474f] hover:border-[#00e676] p-6 rounded-xl shadow-lg flex items-center justify-between group transition-all"
+            className="w-full bg-white hover:bg-gray-100 border border-gray-200 hover:border-[#00e676] p-6 rounded-xl shadow-lg flex items-center justify-between group transition-all"
           >
             <div className="flex items-center gap-4">
                <div className="bg-[#00e676]/10 p-3 rounded-lg w-14 h-14 flex items-center justify-center">
                  <span className="text-[#00e676] font-black text-2xl tracking-tighter">SH</span>
                </div>
               <div className="text-left">
-                  <div className="font-bold text-lg text-gray-900 dark:text-white">SETLING HOTELARIA</div>
+                  <div className="font-bold text-lg text-gray-900">SETLING HOTELARIA</div>
               </div>
             </div>
             <ArrowRight className="text-[#00e676] opacity-0 group-hover:opacity-100 transition-opacity" />
           </button>
         </div>
         
-        <div className="absolute bottom-6 text-gray-400 dark:text-gray-600 text-xs">v1.3.4</div>
+        <div className="absolute bottom-6 text-gray-400 text-xs">v1.3.4</div>
       </div>
     );
   }
 
   if (authStage === 'login') {
     return (
-      <div className="w-full h-screen bg-gray-50 dark:bg-[#0f131a] text-gray-900 dark:text-white flex flex-col items-center justify-center p-6 font-sans transition-colors">
-        {/* Theme Toggle Top Right */}
-        <button 
-            onClick={toggleTheme}
-            className="absolute top-4 right-4 p-2 rounded-full bg-gray-200 dark:bg-white/10 hover:bg-gray-300 dark:hover:bg-white/20 text-gray-600 dark:text-gray-300 transition-colors"
-        >
-            {theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
-        </button>
-
+      <div className="w-full h-screen bg-gray-50 text-gray-900 flex flex-col items-center justify-center p-6 font-sans">
         <div className="w-full max-w-xs">
-          <button onClick={() => { setAuthStage('company_select'); setPassword(''); setError(''); }} className="mb-8 text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white flex items-center gap-2 transition-colors">
+          <button onClick={() => { setAuthStage('company_select'); setPassword(''); setError(''); }} className="mb-8 text-gray-500 hover:text-gray-900 flex items-center gap-2 transition-colors">
             <ArrowLeft size={20} /> <span className="text-sm font-bold">Voltar</span>
           </button>
           
           <div className="text-center mb-8">
               {!logoError && (
                   <div className="flex justify-center mb-4">
-                      <img src={logoUrl} alt="Logo" className="h-10 w-auto object-contain invert dark:invert-0 transition-all" />
+                      <img src={logoUrl} alt="Logo" className="h-10 w-auto object-contain invert transition-all" />
                   </div>
               )}
               
-              <div className="inline-block px-3 py-1 rounded-full bg-gray-200 dark:bg-[#37474f] text-xs text-gray-600 dark:text-gray-300 font-bold mb-4">
+              <div className="inline-block px-3 py-1 rounded-full bg-gray-200 text-xs text-gray-600 font-bold mb-4">
                   {selectedCompany?.name}
               </div>
-              <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Autenticação</h2>
+              <h2 className="text-2xl font-bold text-gray-900">Autenticação</h2>
           </div>
           
           <form onSubmit={handleLogin} className="space-y-4">
             <div className="space-y-1">
                 <label className="text-xs text-gray-500 uppercase font-bold ml-1">Utilizador / Email</label>
                 <div className="relative">
-                    <UserIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 dark:text-gray-500" size={18} />
+                    <UserIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
                     <input 
                         type="text" 
                         value={identifier}
                         onChange={(e) => setIdentifier(e.target.value)}
                         placeholder="Nome de utilizador ou Email"
-                        className="w-full bg-white dark:bg-[#1e2736] border border-gray-300 dark:border-[#37474f] rounded-xl pl-10 p-3 text-gray-900 dark:text-white focus:border-[#4fc3f7] focus:outline-none transition-colors"
+                        className="w-full bg-white border border-gray-300 rounded-xl pl-10 p-3 text-gray-900 focus:border-[#4fc3f7] focus:outline-none transition-colors"
                         autoFocus
                     />
                 </div>
@@ -262,18 +224,18 @@ const App: React.FC = () => {
             <div className="space-y-1">
                 <label className="text-xs text-gray-500 uppercase font-bold ml-1">Password</label>
                 <div className="relative">
-                    <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 dark:text-gray-500" size={18} />
+                    <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
                     <input 
                         type={showPassword ? "text" : "password"} 
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
                         placeholder="••••"
-                        className="w-full bg-white dark:bg-[#1e2736] border border-gray-300 dark:border-[#37474f] rounded-xl pl-10 pr-10 p-3 text-gray-900 dark:text-white focus:border-[#4fc3f7] focus:outline-none transition-colors"
+                        className="w-full bg-white border border-gray-300 rounded-xl pl-10 pr-10 p-3 text-gray-900 focus:border-[#4fc3f7] focus:outline-none transition-colors"
                     />
                     <button
                         type="button"
                         onClick={() => setShowPassword(!showPassword)}
-                        className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
+                        className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
                     >
                         {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                     </button>
@@ -281,7 +243,7 @@ const App: React.FC = () => {
             </div>
             
             {error && (
-                <div className="bg-red-100 dark:bg-red-500/10 border border-red-200 dark:border-red-500/50 text-red-600 dark:text-red-400 text-center text-sm p-3 rounded-lg animate-pulse">
+                <div className="bg-red-100 border border-red-200 text-red-600 text-center text-sm p-3 rounded-lg animate-pulse">
                     {error}
                 </div>
             )}
@@ -289,7 +251,7 @@ const App: React.FC = () => {
             <button 
               type="submit"
               disabled={isLoading}
-              className="w-full bg-[#00e676] hover:bg-[#00c853] text-black font-bold py-4 rounded-xl shadow-lg shadow-green-900/10 dark:shadow-green-900/20 flex justify-center items-center gap-2 transition-transform active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full bg-[#00e676] hover:bg-[#00c853] text-black font-bold py-4 rounded-xl shadow-lg shadow-green-900/10 flex justify-center items-center gap-2 transition-transform active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isLoading ? <Loader2 className="animate-spin" /> : <LogIn size={18} />} 
               ENTRAR
@@ -302,7 +264,7 @@ const App: React.FC = () => {
 
   // --- APP LAYOUT ---
   return (
-      <div className="relative w-full h-full bg-gray-100 dark:bg-[#0f131a] transition-colors">
+      <div className="relative w-full h-full bg-gray-100 transition-colors">
           {/* Header Buttons (Absolute top-right for quick access in development/prod) */}
           <div className="fixed top-4 right-4 z-[100] flex items-center gap-3">
               {selectedCompany && (
@@ -316,16 +278,8 @@ const App: React.FC = () => {
               )}
 
               <button 
-                onClick={toggleTheme}
-                className="bg-white/80 dark:bg-black/40 hover:bg-white dark:hover:bg-black/60 text-gray-700 dark:text-gray-200 p-2 rounded-full border border-gray-200 dark:border-white/10 shadow-lg backdrop-blur-sm transition-all"
-                title={theme === 'dark' ? "Modo Claro" : "Modo Escuro"}
-              >
-                  {theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
-              </button>
-
-              <button 
                 onClick={handleLogout}
-                className="bg-red-100 dark:bg-red-900/80 hover:bg-red-200 dark:hover:bg-red-900 text-red-600 dark:text-red-100 p-2 rounded-full border border-red-200 dark:border-red-700/50 shadow-lg backdrop-blur-sm transition-all"
+                className="bg-red-100 hover:bg-red-200 text-red-600 p-2 rounded-full border border-red-200 shadow-lg backdrop-blur-sm transition-all"
                 title="Sair"
               >
                   <LogOut size={20} />
