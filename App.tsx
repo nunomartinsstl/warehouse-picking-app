@@ -113,7 +113,7 @@ const App: React.FC = () => {
 
   if (authStage === 'loading') {
       return (
-          <div className="w-full h-screen bg-gray-50 flex items-center justify-center text-[#4fc3f7]">
+          <div className="w-full h-screen bg-gray-900 flex items-center justify-center text-[#4fc3f7]">
               <Loader2 className="animate-spin w-10 h-10" />
           </div>
       );
@@ -121,15 +121,15 @@ const App: React.FC = () => {
 
   if (authStage === 'company_select') {
     return (
-      <div className="w-full h-screen bg-gray-50 text-gray-900 flex flex-col items-center justify-center p-6 font-sans">
+      <div className="w-full h-screen bg-gray-900 text-white flex flex-col items-center justify-center p-6 font-sans">
         <div className="mb-12 text-center w-full max-w-md">
             <div className="flex justify-center mb-6">
                 {!logoError ? (
                   <img 
                     src={logoUrl}
                     alt="Company Logo" 
-                    // Invert in light mode because original is white
-                    className="h-24 max-w-full object-contain invert transition-all"
+                    // No invert needed for dark mode since logo is white
+                    className="h-24 max-w-full object-contain transition-all"
                     onError={() => setLogoError(true)}
                   />
                 ) : (
@@ -150,14 +150,14 @@ const App: React.FC = () => {
           
           <button 
             onClick={() => handleCompanySelect("1", "SETLING AVAC")}
-            className="w-full bg-white hover:bg-gray-100 border border-gray-200 hover:border-[#4fc3f7] p-6 rounded-xl shadow-lg flex items-center justify-between group transition-all"
+            className="w-full bg-gray-800 hover:bg-gray-700 border border-gray-700 hover:border-[#4fc3f7] p-6 rounded-xl shadow-lg flex items-center justify-between group transition-all"
           >
             <div className="flex items-center gap-4">
               <div className="bg-[#4fc3f7]/10 p-3 rounded-lg w-14 h-14 flex items-center justify-center">
                  <span className="text-[#4fc3f7] font-black text-2xl tracking-tighter">SA</span>
               </div>
               <div className="text-left">
-                  <div className="font-bold text-lg text-gray-900">SETLING AVAC</div>
+                  <div className="font-bold text-lg text-white">SETLING AVAC</div>
               </div>
             </div>
             <ArrowRight className="text-[#4fc3f7] opacity-0 group-hover:opacity-100 transition-opacity" />
@@ -165,57 +165,57 @@ const App: React.FC = () => {
 
           <button 
             onClick={() => handleCompanySelect("2", "SETLING HOTELARIA")}
-            className="w-full bg-white hover:bg-gray-100 border border-gray-200 hover:border-[#00e676] p-6 rounded-xl shadow-lg flex items-center justify-between group transition-all"
+            className="w-full bg-gray-800 hover:bg-gray-700 border border-gray-700 hover:border-[#00e676] p-6 rounded-xl shadow-lg flex items-center justify-between group transition-all"
           >
             <div className="flex items-center gap-4">
                <div className="bg-[#00e676]/10 p-3 rounded-lg w-14 h-14 flex items-center justify-center">
                  <span className="text-[#00e676] font-black text-2xl tracking-tighter">SH</span>
                </div>
               <div className="text-left">
-                  <div className="font-bold text-lg text-gray-900">SETLING HOTELARIA</div>
+                  <div className="font-bold text-lg text-white">SETLING HOTELARIA</div>
               </div>
             </div>
             <ArrowRight className="text-[#00e676] opacity-0 group-hover:opacity-100 transition-opacity" />
           </button>
         </div>
         
-        <div className="absolute bottom-6 text-gray-400 text-xs">v1.3.4</div>
+        <div className="absolute bottom-6 text-gray-600 text-xs">v1.3.4</div>
       </div>
     );
   }
 
   if (authStage === 'login') {
     return (
-      <div className="w-full h-screen bg-gray-50 text-gray-900 flex flex-col items-center justify-center p-6 font-sans">
+      <div className="w-full h-screen bg-gray-900 text-white flex flex-col items-center justify-center p-6 font-sans">
         <div className="w-full max-w-xs">
-          <button onClick={() => { setAuthStage('company_select'); setPassword(''); setError(''); }} className="mb-8 text-gray-500 hover:text-gray-900 flex items-center gap-2 transition-colors">
+          <button onClick={() => { setAuthStage('company_select'); setPassword(''); setError(''); }} className="mb-8 text-gray-500 hover:text-white flex items-center gap-2 transition-colors">
             <ArrowLeft size={20} /> <span className="text-sm font-bold">Voltar</span>
           </button>
           
           <div className="text-center mb-8">
               {!logoError && (
                   <div className="flex justify-center mb-4">
-                      <img src={logoUrl} alt="Logo" className="h-10 w-auto object-contain invert transition-all" />
+                      <img src={logoUrl} alt="Logo" className="h-10 w-auto object-contain transition-all" />
                   </div>
               )}
               
-              <div className="inline-block px-3 py-1 rounded-full bg-gray-200 text-xs text-gray-600 font-bold mb-4">
+              <div className="inline-block px-3 py-1 rounded-full bg-gray-800 text-xs text-gray-400 font-bold mb-4 border border-gray-700">
                   {selectedCompany?.name}
               </div>
-              <h2 className="text-2xl font-bold text-gray-900">Autenticação</h2>
+              <h2 className="text-2xl font-bold text-white">Autenticação</h2>
           </div>
           
           <form onSubmit={handleLogin} className="space-y-4">
             <div className="space-y-1">
                 <label className="text-xs text-gray-500 uppercase font-bold ml-1">Utilizador / Email</label>
                 <div className="relative">
-                    <UserIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
+                    <UserIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500" size={18} />
                     <input 
                         type="text" 
                         value={identifier}
                         onChange={(e) => setIdentifier(e.target.value)}
                         placeholder="Nome de utilizador ou Email"
-                        className="w-full bg-white border border-gray-300 rounded-xl pl-10 p-3 text-gray-900 focus:border-[#4fc3f7] focus:outline-none transition-colors"
+                        className="w-full bg-gray-800 border border-gray-700 rounded-xl pl-10 p-3 text-white placeholder-gray-600 focus:border-[#4fc3f7] focus:outline-none transition-colors"
                         autoFocus
                     />
                 </div>
@@ -224,18 +224,18 @@ const App: React.FC = () => {
             <div className="space-y-1">
                 <label className="text-xs text-gray-500 uppercase font-bold ml-1">Password</label>
                 <div className="relative">
-                    <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
+                    <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500" size={18} />
                     <input 
                         type={showPassword ? "text" : "password"} 
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
                         placeholder="••••"
-                        className="w-full bg-white border border-gray-300 rounded-xl pl-10 pr-10 p-3 text-gray-900 focus:border-[#4fc3f7] focus:outline-none transition-colors"
+                        className="w-full bg-gray-800 border border-gray-700 rounded-xl pl-10 pr-10 p-3 text-white placeholder-gray-600 focus:border-[#4fc3f7] focus:outline-none transition-colors"
                     />
                     <button
                         type="button"
                         onClick={() => setShowPassword(!showPassword)}
-                        className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                        className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-300"
                     >
                         {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                     </button>
@@ -243,7 +243,7 @@ const App: React.FC = () => {
             </div>
             
             {error && (
-                <div className="bg-red-100 border border-red-200 text-red-600 text-center text-sm p-3 rounded-lg animate-pulse">
+                <div className="bg-red-900/30 border border-red-800 text-red-400 text-center text-sm p-3 rounded-lg animate-pulse">
                     {error}
                 </div>
             )}
@@ -264,11 +264,11 @@ const App: React.FC = () => {
 
   // --- APP LAYOUT ---
   return (
-      <div className="relative w-full h-full bg-gray-100 transition-colors">
+      <div className="relative w-full h-full bg-gray-900 text-white transition-colors">
           {/* Header Buttons (Absolute top-right for quick access in development/prod) */}
           <div className="fixed top-4 right-4 z-[100] flex items-center gap-3">
               {selectedCompany && (
-                <div className="bg-white p-2 rounded-lg shadow-lg border border-white/20 hidden xs:block">
+                <div className="bg-white/90 p-2 rounded-lg shadow-lg border border-white/20 hidden xs:block">
                     <img
                         src={selectedCompany.id === '1' ? logoAvac : logoHotelaria}
                         alt={selectedCompany.name}
@@ -279,7 +279,7 @@ const App: React.FC = () => {
 
               <button 
                 onClick={handleLogout}
-                className="bg-red-100 hover:bg-red-200 text-red-600 p-2 rounded-full border border-red-200 shadow-lg backdrop-blur-sm transition-all"
+                className="bg-red-900/30 hover:bg-red-900/50 text-red-400 p-2 rounded-full border border-red-900/50 shadow-lg backdrop-blur-sm transition-all"
                 title="Sair"
               >
                   <LogOut size={20} />
@@ -289,7 +289,10 @@ const App: React.FC = () => {
           {view === 'manager' ? (
              <ManagerPlatform onBack={() => setView('picker')} />
           ) : (
-             <PickerInterface onSwitchToManager={() => setView('manager')} />
+             <PickerInterface 
+                onSwitchToManager={() => setView('manager')} 
+                companyLogo={selectedCompany?.id === '1' ? logoAvac : logoHotelaria}
+             />
           )}
       </div>
   );

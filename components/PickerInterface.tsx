@@ -7,7 +7,7 @@ import { DEFAULT_LAYOUT_COORDS, DEFAULT_VISUAL_LAYOUT } from '../utils/defaults'
 import { Home, CheckCircle, Navigation, Package, ArrowRight, ArrowLeft, Clock, QrCode, List, X, RefreshCw, History, AlertTriangle, Box, MapPin, Play, Trash2, Upload, EyeOff, Save, AlignJustify, Layers, Loader2, Zap, ZoomIn, ZoomOut, CheckCheck, Calendar, Search } from 'lucide-react';
 import { Html5Qrcode } from 'html5-qrcode';
 
-export const PickerInterface: React.FC<{ onSwitchToManager: () => void }> = ({ onSwitchToManager }) => {
+export const PickerInterface: React.FC<{ onSwitchToManager: () => void; companyLogo?: string }> = ({ onSwitchToManager, companyLogo }) => {
   // State
   const [layoutCoords, setLayoutCoords] = useState<Map<string, LayoutNode>>(new Map());
   const [visualLayout, setVisualLayout] = useState<WarehouseLayout | null>(null);
@@ -731,20 +731,30 @@ export const PickerInterface: React.FC<{ onSwitchToManager: () => void }> = ({ o
 
         {/* HUD - Header */}
         <div className="absolute top-0 left-0 right-0 p-4 flex justify-between items-start z-10 pointer-events-none">
-             <div className="pointer-events-auto flex gap-2">
-                 <button onClick={() => setIsSetupOpen(true)} className="bg-white dark:bg-gray-800 p-2 rounded-lg border border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 shadow-lg text-[#4fc3f7] transition-colors">
-                     <Home size={24} />
-                 </button>
-                 {!isSetupOpen && (
-                     <>
-                        <button onClick={loadCloudData} className="bg-white dark:bg-gray-800 p-2 rounded-lg border border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 shadow-lg text-gray-700 dark:text-white transition-colors">
-                            <RefreshCw size={24} className={isRefreshing ? "animate-spin" : ""} />
-                        </button>
-                        <button onClick={() => setShowHistory(true)} className="bg-white dark:bg-gray-800 p-2 rounded-lg border border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 shadow-lg flex items-center gap-2 px-3 text-gray-700 dark:text-white transition-colors">
-                            <History size={24} /> <span className="hidden sm:inline font-bold">Histórico</span>
-                        </button>
-                     </>
+             <div className="pointer-events-auto flex flex-col gap-3">
+                 {/* Branding Logo */}
+                 {companyLogo && (
+                     <div className="bg-white/90 p-2 rounded-lg shadow-lg border border-gray-200 backdrop-blur-sm self-start">
+                        <img src={companyLogo} alt="Logo" className="h-8 w-auto object-contain" />
+                     </div>
                  )}
+
+                 {/* Control Buttons */}
+                 <div className="flex gap-2">
+                    <button onClick={() => setIsSetupOpen(true)} className="bg-white dark:bg-gray-800 p-2 rounded-lg border border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 shadow-lg text-[#4fc3f7] transition-colors">
+                        <Home size={24} />
+                    </button>
+                    {!isSetupOpen && (
+                        <>
+                            <button onClick={loadCloudData} className="bg-white dark:bg-gray-800 p-2 rounded-lg border border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 shadow-lg text-gray-700 dark:text-white transition-colors">
+                                <RefreshCw size={24} className={isRefreshing ? "animate-spin" : ""} />
+                            </button>
+                            <button onClick={() => setShowHistory(true)} className="bg-white dark:bg-gray-800 p-2 rounded-lg border border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 shadow-lg flex items-center gap-2 px-3 text-gray-700 dark:text-white transition-colors">
+                                <History size={24} /> <span className="hidden sm:inline font-bold">Histórico</span>
+                            </button>
+                        </>
+                    )}
+                 </div>
              </div>
              
              {/* Order Name Display */}
