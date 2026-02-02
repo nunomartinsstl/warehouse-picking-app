@@ -165,4 +165,90 @@ export const ManagerPlatform: React.FC<ManagerPlatformProps> = ({ onBack }) => {
                             <div 
                                 key={order.id} 
                                 onClick={() => setSelectedOrder(order)}
-                                className="bg-white dark:bg-[#1e2736]/50 rounded-xl border border-gray-200 dark:border-[#37474f] p-5 flex
+                                className="bg-white dark:bg-[#1e2736]/50 rounded-xl border border-gray-200 dark:border-[#37474f] p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm hover:bg-gray-50 dark:hover:bg-[#1e2736] transition-colors cursor-pointer group"
+                            >
+                                <div className="flex-1">
+                                    <div className="flex items-center gap-2 mb-2">
+                                        <div className="bg-[#00e676]/20 p-1.5 rounded-full">
+                                            <CheckCircle size={16} className="text-[#00e676]" />
+                                        </div>
+                                        <h3 className="font-bold text-gray-900 dark:text-white text-lg">{order.name}</h3>
+                                    </div>
+                                    <div className="flex items-center gap-4 text-xs text-gray-500 dark:text-gray-400">
+                                        <span className="flex items-center gap-1">
+                                            <Clock size={12}/> {order.completedAt ? new Date(order.completedAt).toLocaleString() : 'Data N/A'}
+                                        </span>
+                                        <span>{order.pickedItems?.length || 0} itens recolhidos</span>
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                                    <button 
+                                        onClick={() => handleRevertOrder(order.id)}
+                                        className="p-2 text-gray-400 hover:text-[#4fc3f7] hover:bg-gray-100 dark:hover:bg-[#263238] rounded-full transition-colors"
+                                        title="Reverter para Aberto"
+                                    >
+                                        <RotateCcw size={18} />
+                                    </button>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                 )}
+            </div>
+
+            {/* DETAILS MODAL */}
+            {selectedOrder && (
+                <div className="absolute inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+                    <div className="bg-white dark:bg-[#141923] border border-gray-200 dark:border-[#37474f] rounded-2xl w-full max-w-2xl max-h-[80vh] flex flex-col shadow-2xl transition-colors">
+                        <div className="p-4 border-b border-gray-200 dark:border-[#37474f] flex justify-between items-center bg-gray-50 dark:bg-[#1e2736] rounded-t-2xl">
+                            <div>
+                                <div className="text-xs text-gray-500 dark:text-gray-400 uppercase font-bold">Detalhes do Pedido</div>
+                                <h2 className="text-xl font-bold text-gray-900 dark:text-white">{selectedOrder.name}</h2>
+                            </div>
+                            <button onClick={() => setSelectedOrder(null)} className="p-2 hover:bg-gray-200 dark:hover:bg-[#263238] rounded-full text-gray-500 dark:text-gray-400 transition-colors">
+                                <X size={24} />
+                            </button>
+                        </div>
+                        
+                        <div className="flex-1 overflow-y-auto p-0">
+                            <table className="w-full text-sm text-left">
+                                <thead className="text-xs text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-[#1e2736] uppercase font-bold sticky top-0">
+                                    <tr>
+                                        <th className="px-4 py-3">Material</th>
+                                        <th className="px-4 py-3">Lote/Posição</th>
+                                        <th className="px-4 py-3 text-right">Qtd</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-200 dark:divide-[#37474f] text-gray-700 dark:text-gray-300">
+                                    {(selectedOrder.pickedItems || []).map((item, idx) => (
+                                        <tr key={idx} className="hover:bg-gray-50 dark:hover:bg-[#1e2736]/50">
+                                            <td className="px-4 py-3 font-medium">{item.material}</td>
+                                            <td className="px-4 py-3 text-gray-500 dark:text-gray-400 font-mono text-xs">{item.bin}</td>
+                                            <td className="px-4 py-3 text-right font-bold text-[#00e676]">{item.pickedQty}</td>
+                                        </tr>
+                                    ))}
+                                    {(!selectedOrder.pickedItems || selectedOrder.pickedItems.length === 0) && (
+                                        <tr>
+                                            <td colSpan={3} className="px-4 py-8 text-center text-gray-500 dark:text-gray-400 italic">
+                                                Nenhum item registado.
+                                            </td>
+                                        </tr>
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div className="p-4 border-t border-gray-200 dark:border-[#37474f] bg-gray-50 dark:bg-[#1e2736] rounded-b-2xl flex justify-end">
+                             <button 
+                                onClick={() => handleRevertOrder(selectedOrder.id)}
+                                className="text-red-500 dark:text-red-400 text-sm font-bold flex items-center gap-2 hover:bg-red-50 dark:hover:bg-red-900/20 px-4 py-2 rounded-lg transition-colors"
+                             >
+                                 <RotateCcw size={16} /> Reverter para Aberto
+                             </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};
