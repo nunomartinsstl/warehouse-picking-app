@@ -1,6 +1,6 @@
 {
-  "name": "Warehouse Picker",
-  "short_name": "Picker",
+  "name": "Setling Picking",
+  "short_name": "Picking",
   "start_url": ".",
   "display": "standalone",
   "background_color": "#1a2332",
@@ -8,7 +8,7 @@
   "orientation": "portrait",
   "icons": [
     {
-      "src": "https://mainpage.pt/wp-content/uploads/2024/11/logo-mainpage-vertical.svg",
+      "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='100' fill='%231e88e5'/%3E%3Cpath d='M256 120L80 210l176 90 176-90-176-90zM80 250v140l176 90V340L80 250zM432 250L256 340v140l176-90V250z' fill='%23bbdefb'/%3E%3C/svg%3E",
       "sizes": "any",
       "type": "image/svg+xml"
     }

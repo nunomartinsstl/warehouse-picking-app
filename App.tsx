@@ -21,7 +21,11 @@ const App: React.FC = () => {
   
   // Logo State
   const [logoError, setLogoError] = useState(false);
-  const logoUrl = "https://mainpage.pt/wp-content/uploads/2024/11/logo-mainpage-vertical.svg";
+  
+  // Updated Logo URLs
+  const logoUrl = "https://setling.pt/wp-content/uploads/2024/07/setling-logo-white-110.svg";
+  const logoAvac = "https://setling-avac.com/wp-content/uploads/2024/10/setling-avac-logo-color-192px.svg";
+  const logoHotelaria = "https://setlinghotelaria.pt/wp-content/uploads/2024/12/setling-hotelaria-logo-big.svg";
 
   // Guard to prevent auto-login logic from firing during manual login process
   const isManualLogin = useRef(false);
@@ -122,8 +126,8 @@ const App: React.FC = () => {
                   <img 
                     src={logoUrl}
                     alt="Company Logo" 
-                    // ADDED: brightness-0 invert makes the logo pure white
-                    className="h-32 max-w-full object-contain brightness-0 invert"
+                    // UPDATED: Removed filters, logo is natively white
+                    className="h-24 max-w-full object-contain"
                     onError={() => setLogoError(true)}
                   />
                 ) : (
@@ -136,7 +140,7 @@ const App: React.FC = () => {
                 )}
             </div>
             
-            <p className="text-[#4fc3f7] tracking-widest text-sm font-bold opacity-80">PICKING DE ARMAZÉM</p>
+            <p className="text-[#3b82f6] tracking-widest text-lg font-bold opacity-80">PICKING DE ARMAZÉM</p>
         </div>
         
         <div className="w-full max-w-sm space-y-4">
@@ -173,7 +177,7 @@ const App: React.FC = () => {
           </button>
         </div>
         
-        <div className="absolute bottom-6 text-gray-600 text-xs">v1.3.2</div>
+        <div className="absolute bottom-6 text-gray-600 text-xs">v1.3.3</div>
       </div>
     );
   }
@@ -189,8 +193,8 @@ const App: React.FC = () => {
           <div className="text-center mb-8">
               {!logoError && (
                   <div className="flex justify-center mb-4">
-                      {/* ADDED: brightness-0 invert makes the logo pure white, opacity-90 for slight blend */}
-                      <img src={logoUrl} alt="Logo" className="h-12 w-auto object-contain opacity-90 brightness-0 invert" />
+                      {/* UPDATED: Removed filters, logo is natively white */}
+                      <img src={logoUrl} alt="Logo" className="h-10 w-auto object-contain" />
                   </div>
               )}
               
@@ -256,13 +260,12 @@ const App: React.FC = () => {
           {/* Header Buttons (Absolute top-right for quick access in development/prod) */}
           <div className="fixed top-4 right-4 z-[100] flex items-center gap-3">
               {selectedCompany && (
-                <div className={`
-                    px-3 py-1 rounded-lg border backdrop-blur-md font-black text-lg tracking-tighter shadow-lg
-                    ${selectedCompany.id === '1' 
-                        ? 'bg-[#4fc3f7]/20 border-[#4fc3f7]/50 text-[#4fc3f7]' 
-                        : 'bg-[#00e676]/20 border-[#00e676]/50 text-[#00e676]'}
-                `}>
-                    {selectedCompany.id === '1' ? 'SA' : 'SH'}
+                <div className="bg-white p-2 rounded-lg shadow-lg border border-white/20">
+                    <img
+                        src={selectedCompany.id === '1' ? logoAvac : logoHotelaria}
+                        alt={selectedCompany.name}
+                        className="h-8 w-auto object-contain"
+                    />
                 </div>
               )}
 

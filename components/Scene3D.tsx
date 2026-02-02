@@ -5,52 +5,6 @@ import * as THREE from 'three';
 import { LayoutNode, PickingTask, WarehouseLayout, Unit } from '../types';
 import { FLOORS } from '../utils/optimizer';
 
-// Augment global JSX namespace for React Three Fiber elements
-// We augment both 'react' module JSX and global JSX to cover different TS configurations
-declare module 'react' {
-  namespace JSX {
-    interface IntrinsicElements {
-      group: any;
-      mesh: any;
-      boxGeometry: any;
-      meshStandardMaterial: any;
-      lineSegments: any;
-      edgesGeometry: any;
-      lineBasicMaterial: any;
-      meshLambertMaterial: any;
-      meshBasicMaterial: any;
-      planeGeometry: any;
-      sphereGeometry: any;
-      ambientLight: any;
-      pointLight: any;
-      directionalLight: any;
-      primitive: any;
-    }
-  }
-}
-
-declare global {
-  namespace JSX {
-    interface IntrinsicElements {
-      group: any;
-      mesh: any;
-      boxGeometry: any;
-      meshStandardMaterial: any;
-      lineSegments: any;
-      edgesGeometry: any;
-      lineBasicMaterial: any;
-      meshLambertMaterial: any;
-      meshBasicMaterial: any;
-      planeGeometry: any;
-      sphereGeometry: any;
-      ambientLight: any;
-      pointLight: any;
-      directionalLight: any;
-      primitive: any;
-    }
-  }
-}
-
 interface SceneProps {
   visualLayout: WarehouseLayout | null;
   layoutCoords: Map<string, LayoutNode>;
