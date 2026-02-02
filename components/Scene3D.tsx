@@ -732,7 +732,7 @@ const WarehouseContent: React.FC<SceneProps> = ({ visualLayout, layoutCoords, ta
 
 export const Scene3D: React.FC<SceneProps> = (props) => {
   return (
-    <div className="w-full h-full bg-[#0f131a]">
+    <div className="w-full h-full bg-gray-200 dark:bg-[#0f131a] transition-colors duration-500">
       <Canvas camera={{ position: [0, 60, 80], fov: 45 }}>
         <WarehouseContent {...props} />
       </Canvas>

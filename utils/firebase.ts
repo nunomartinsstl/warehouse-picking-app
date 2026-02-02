@@ -1,7 +1,7 @@
-import { initializeApp } from 'firebase/app';
-import { getDatabase, ref, get, child, update, set, push, remove, query, orderByChild, equalTo } from 'firebase/database';
-import { getAuth, signInWithEmailAndPassword, signOut } from 'firebase/auth';
-import { StockItem, OrderItem, CloudOrder, PickingTask, User } from '../types';
+import firebase from 'firebase/compat/app';
+import 'firebase/compat/database';
+import 'firebase/compat/auth';
+import { User, StockItem, CloudOrder, OrderItem, PickingTask } from '../types';
 
 // --- FIREBASE CONFIGURATION ---
 const firebaseConfig = {
@@ -20,12 +20,13 @@ let auth: any = null;
 let initError: string | null = null;
 
 try {
-    const app = initializeApp(firebaseConfig);
+    if (!firebase.apps.length) {
+        firebase.initializeApp(firebaseConfig);
+    }
     
     // CRITICAL FIX: Explicitly pass the URL to getDatabase. 
-    // This is required for databases hosted in 'europe-west1' to bypass region auto-detection failures.
-    db = getDatabase(app, firebaseConfig.databaseURL); 
-    auth = getAuth(app);
+    db = firebase.app().database(firebaseConfig.databaseURL); 
+    auth = firebase.auth();
     
     console.log("Firebase initialized. Connected to:", firebaseConfig.databaseURL);
 } catch (e: any) {
@@ -33,7 +34,7 @@ try {
     initError = e.message || "Unknown Firebase initialization error";
 }
 
-// Export auth for App.tsx to use in onAuthStateChanged
+// Export auth for App.tsx
 export { auth };
 
 // Helper to check DB status
@@ -49,13 +50,13 @@ const ensureDb = () => {
 
 export const signOutUser = async () => {
     if (auth) {
-        await signOut(auth);
+        await auth.signOut();
     }
 };
 
 export const fetchUserProfile = async (uid: string): Promise<User> => {
     const database = ensureDb();
-    const snapshot = await get(child(ref(database), `nexus_users/${uid}`));
+    const snapshot = await database.ref(`nexus_users/${uid}`).once('value');
     if (!snapshot.exists()) {
         throw new Error("Perfil de utilizador não encontrado.");
     }
@@ -63,16 +64,11 @@ export const fetchUserProfile = async (uid: string): Promise<User> => {
 };
 
 export const authenticateUser = async (identifier: string, password: string, targetCompanyId: string): Promise<User> => {
-    const database = ensureDb();
-    
     if (!auth) throw new Error("Serviço de autenticação não inicializado.");
 
     try {
         let emailToAuth = identifier;
 
-        // LOCAL STORAGE USERNAME LOOKUP
-        // Since DB rules prevent looking up username->email for unauthenticated users,
-        // we check if this device remembers the mapping from a previous successful login.
         if (!identifier.includes('@')) {
              const storedEmail = localStorage.getItem(`usermap_${identifier.toLowerCase()}`);
              if (storedEmail) {
@@ -83,33 +79,29 @@ export const authenticateUser = async (identifier: string, password: string, tar
              }
         }
 
-        // 1. Authenticate with Firebase Auth
-        const userCredential = await signInWithEmailAndPassword(auth, emailToAuth, password);
-        const uid = userCredential.user.uid;
+        const userCredential = await auth.signInWithEmailAndPassword(emailToAuth, password);
+        const uid = userCredential.user?.uid;
+        
+        if (!uid) throw new Error("Erro ao obter UID do utilizador.");
 
-        // 2. Fetch User Profile
         const user = await fetchUserProfile(uid);
 
-        // 3. Check Permissions
         const userRole = (user.role || '').toUpperCase();
         const allowedRoles = ['ADMIN', 'LOGISTICA', 'LOGÍSTICA'];
         
         if (!allowedRoles.includes(userRole)) {
-            await signOut(auth);
+            await auth.signOut();
             throw new Error("Acesso negado. Apenas perfil 'Admin' ou 'Logística'.");
         }
 
-        // Admin has access to all companies. Others must match companyId.
         if (userRole !== 'ADMIN' && user.companyId !== targetCompanyId) {
-            await signOut(auth); // Security: Kill session immediately if they don't belong here
+            await auth.signOut();
             throw new Error("Não tem permissão para aceder a esta empresa.");
         }
         
-        // 4. Save Username Mapping for future logins
         if (user.username) {
             localStorage.setItem(`usermap_${user.username.toLowerCase()}`, user.email);
         }
-        // Save Last Email for convenience
         localStorage.setItem('setling_last_email', user.email);
 
         return user;
@@ -130,23 +122,17 @@ export const authenticateUser = async (identifier: string, password: string, tar
 export const fetchStockFromCloud = async (): Promise<StockItem[]> => {
     const database = ensureDb();
     try {
-        const dbRef = ref(database);
-        // Updated path to 'nexus_stock'
-        const snapshot = await get(child(dbRef, 'nexus_stock'));
+        const snapshot = await database.ref('nexus_stock').once('value');
         if (snapshot.exists()) {
             const data = snapshot.val();
             const rawList = Array.isArray(data) ? data : Object.values(data);
             
-            // Map 'nexus_stock' schema to internal 'StockItem' type
-            // External: sku, description, quantity, batch
-            // Internal: material, description, qtyAvailable, bin
             return rawList.map((item: any) => ({
                 material: item.sku || '',
                 description: item.description || '',
                 qtyAvailable: Number(item.quantity) || 0,
-                // Using 'batch' as 'bin' location. If batch is "-", it's unassigned.
                 bin: (item.batch && item.batch !== '-') ? item.batch : 'Geral' 
-            })).filter(i => i.material);
+            })).filter((i: any) => i.material);
         } else {
             console.warn("No stock found in DB (nexus_stock)");
             return [];
@@ -158,11 +144,8 @@ export const fetchStockFromCloud = async (): Promise<StockItem[]> => {
 };
 
 export const saveStockToCloud = async (stock: StockItem[]) => {
-    // Note: In the new structure, this might overwrite with the wrong format if not careful.
-    // Ideally, the other app handles stock updates, but keeping this for compatibility if needed.
     const database = ensureDb();
     try {
-        // Reverse mapping for saving (Internal -> External)
         const nexusStock = stock.map(s => ({
             sku: s.material,
             description: s.description,
@@ -170,7 +153,7 @@ export const saveStockToCloud = async (stock: StockItem[]) => {
             batch: s.bin,
             lastUpdated: new Date().toISOString()
         }));
-        await set(ref(database, 'nexus_stock'), nexusStock);
+        await database.ref('nexus_stock').set(nexusStock);
         console.log("Stock saved successfully to nexus_stock");
     } catch (e) {
         console.error("Error saving stock:", e);
@@ -183,21 +166,17 @@ export const saveStockToCloud = async (stock: StockItem[]) => {
 export const fetchOpenOrdersFromCloud = async (): Promise<CloudOrder[]> => {
     const database = ensureDb();
     try {
-        // Updated path to 'nexus_orders'
-        const ordersRef = ref(database, 'nexus_orders');
-        const snapshot = await get(ordersRef);
+        const snapshot = await database.ref('nexus_orders').once('value');
         
         if (snapshot.exists()) {
             const data = snapshot.val();
-            // Handle both Array and Object responses from Firebase
             const allOrders = Object.keys(data).map(key => {
                 const rawOrder = data[key];
                 return {
-                    id: key, // Use the Firebase Key (or existing ID if valid)
+                    id: key,
                     name: rawOrder.title || rawOrder.name || 'Sem Nome',
                     status: rawOrder.status || 'OPEN',
                     createdAt: rawOrder.dateCreated || rawOrder.createdAt || new Date().toISOString(),
-                    // Map items: sku -> material, quantity -> qty
                     items: (rawOrder.items || []).map((i: any) => ({
                         material: i.sku || i.material,
                         qty: Number(i.quantity || i.qty)
@@ -205,7 +184,6 @@ export const fetchOpenOrdersFromCloud = async (): Promise<CloudOrder[]> => {
                 };
             }) as CloudOrder[];
 
-            // Client-side filter
             const openOrders = allOrders.filter(o => o.status === 'OPEN' || o.status === 'IN PROCESS');
             return openOrders;
         }
@@ -219,8 +197,7 @@ export const fetchOpenOrdersFromCloud = async (): Promise<CloudOrder[]> => {
 export const fetchCompletedOrdersFromCloud = async (): Promise<CloudOrder[]> => {
     const database = ensureDb();
     try {
-        const ordersRef = ref(database, 'nexus_orders');
-        const snapshot = await get(ordersRef);
+        const snapshot = await database.ref('nexus_orders').once('value');
         
         if (snapshot.exists()) {
             const data = snapshot.val();
@@ -240,7 +217,6 @@ export const fetchCompletedOrdersFromCloud = async (): Promise<CloudOrder[]> => 
                 };
             }) as CloudOrder[];
 
-            // Updated status check to 'COMPLETED'
             return allOrders.filter(o => o.status === 'COMPLETED');
         }
         return [];
@@ -253,25 +229,24 @@ export const fetchCompletedOrdersFromCloud = async (): Promise<CloudOrder[]> => 
 export const createCloudOrder = async (name: string, items: OrderItem[]) => {
     const database = ensureDb();
     try {
-        const ordersRef = ref(database, 'nexus_orders');
-        const newOrderRef = push(ordersRef);
+        const ordersRef = database.ref('nexus_orders');
+        const newOrderRef = ordersRef.push();
         
-        // Map Internal -> External format
         const newOrder = {
             id: newOrderRef.key,
-            title: name, // Internal 'name' -> External 'title'
+            title: name,
             items: items.map(i => ({
-                sku: i.material, // Internal 'material' -> External 'sku'
-                quantity: i.qty, // Internal 'qty' -> External 'quantity'
-                description: '', // Optional
+                sku: i.material,
+                quantity: i.qty,
+                description: '',
                 isCustom: false
             })),
             status: 'OPEN',
-            dateCreated: new Date().toISOString(), // Internal 'createdAt' -> External 'dateCreated'
+            dateCreated: new Date().toISOString(),
             creator: 'WarehousePickerApp'
         };
         
-        await set(newOrderRef, newOrder);
+        await newOrderRef.set(newOrder);
         console.log("Order created:", newOrderRef.key);
         return newOrderRef.key;
     } catch (e) {
@@ -283,7 +258,7 @@ export const createCloudOrder = async (name: string, items: OrderItem[]) => {
 export const deleteOrder = async (orderId: string) => {
     const database = ensureDb();
     try {
-        await remove(ref(database, `nexus_orders/${orderId}`));
+        await database.ref(`nexus_orders/${orderId}`).remove();
         console.log("Order deleted:", orderId);
     } catch (e) {
         console.error("Error deleting order:", e);
@@ -291,7 +266,6 @@ export const deleteOrder = async (orderId: string) => {
     }
 };
 
-// New function to revert a completed order back to OPEN (Removing picking data)
 export const revertOrderToOpen = async (orderId: string) => {
     const database = ensureDb();
     const updates: any = {};
@@ -303,7 +277,7 @@ export const revertOrderToOpen = async (orderId: string) => {
     updates[`/nexus_orders/${orderId}/exportData`] = null;
 
     try {
-        await update(ref(database), updates);
+        await database.ref().update(updates);
         console.log(`Order ${orderId} reverted to OPEN. Picking data cleared.`);
     } catch (e) {
         console.error(`Error reverting order ${orderId}:`, e);
@@ -322,7 +296,7 @@ export const updateOrderStatus = async (orderId: string, newStatus: 'OPEN' | 'IN
     }
 
     try {
-        await update(ref(database), updates);
+        await database.ref().update(updates);
         console.log(`Order ${orderId} updated to ${newStatus}`);
     } catch (e) {
         console.error(`Error updating order ${orderId}:`, e);
@@ -337,11 +311,8 @@ export const markOrderComplete = async (orderId: string, pickedItems: PickingTas
     updates[`/nexus_orders/${orderId}/status`] = 'COMPLETED';
     updates[`/nexus_orders/${orderId}/completedAt`] = new Date().toISOString();
     
-    // Save picking results (upload to Cloud Order)
     updates[`/nexus_orders/${orderId}/pickedItems`] = pickedItems;
     
-    // GENERATE EXPORT DATA STRUCTURE
-    // Format: Itm, C, I, Cen., Depósito de saída, Depósito, Material, Texto breve, Lote, Qtd.pedido, Dt.remessa
     const exportData = pickedItems.map((task, index) => ({
         Itm: (index + 1) * 10,
         C: 'P',
@@ -350,21 +321,20 @@ export const markOrderComplete = async (orderId: string, pickedItems: PickingTas
         DepositoSaida: '0001',
         Deposito: '0004',
         Material: task.material,
-        TextoBreve: '', // Description not always available in task context, left empty for external fill
-        Lote: task.bin, // The picked bin
-        QtdPedido: task.pickedQty ?? 0, // Ensure value is not undefined (default to 0)
-        DtRemessa: new Date().toLocaleDateString('pt-PT') // Today's date DD/MM/YYYY
+        TextoBreve: '',
+        Lote: task.bin,
+        QtdPedido: task.pickedQty ?? 0,
+        DtRemessa: new Date().toLocaleDateString('pt-PT')
     }));
 
     updates[`/nexus_orders/${orderId}/exportData`] = exportData;
 
-    // Save Excel report if provided
     if (excelReportBase64) {
         updates[`/nexus_orders/${orderId}/excelReport`] = excelReportBase64;
     }
 
     try {
-        await update(ref(database), updates);
+        await database.ref().update(updates);
         console.log(`Order ${orderId} completed and results uploaded.`);
     } catch (e) {
         console.error(`Error completing order ${orderId}:`, e);

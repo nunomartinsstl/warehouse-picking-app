@@ -1,10 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { PickerInterface } from './components/PickerInterface';
 import { ManagerPlatform } from './components/ManagerPlatform';
-import { Lock, ArrowRight, ArrowLeft, Mail, LogIn, Loader2, LogOut, User as UserIcon } from 'lucide-react';
+import { Lock, ArrowRight, ArrowLeft, Mail, LogIn, Loader2, LogOut, User as UserIcon, Eye, EyeOff } from 'lucide-react';
 import { authenticateUser, auth, fetchUserProfile, signOutUser } from './utils/firebase';
 import { User as UserType } from './types';
-import { onAuthStateChanged } from 'firebase/auth';
 
 const App: React.FC = () => {
   const [authStage, setAuthStage] = useState<'loading' | 'company_select' | 'login' | 'app'>('loading');
@@ -13,6 +12,7 @@ const App: React.FC = () => {
   // Login Form State
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [currentUser, setCurrentUser] = useState<UserType | null>(null);
@@ -37,7 +37,9 @@ const App: React.FC = () => {
       if (lastEmail) setIdentifier(lastEmail);
 
       // 2. Listen for Firebase Auth Session
-      const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (!auth) return;
+
+      const unsubscribe = auth.onAuthStateChanged(async (user: any) => {
           // If we are performing a manual login, let handleLogin function control the flow
           if (isManualLogin.current) return;
 
@@ -225,12 +227,19 @@ const App: React.FC = () => {
                 <div className="relative">
                     <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500" size={18} />
                     <input 
-                        type="password" 
+                        type={showPassword ? "text" : "password"} 
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
                         placeholder="••••"
-                        className="w-full bg-[#1e2736] border border-[#37474f] rounded-xl pl-10 p-3 text-white focus:border-[#4fc3f7] focus:outline-none transition-colors"
+                        className="w-full bg-[#1e2736] border border-[#37474f] rounded-xl pl-10 pr-10 p-3 text-white focus:border-[#4fc3f7] focus:outline-none transition-colors"
                     />
+                    <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-300"
+                    >
+                        {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                    </button>
                 </div>
             </div>
             

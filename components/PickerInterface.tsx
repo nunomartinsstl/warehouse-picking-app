@@ -713,7 +713,7 @@ export const PickerInterface: React.FC<{ onSwitchToManager: () => void }> = ({ o
   const hasPickedItems = pickingTasks.some(t => t.status === 'picked');
 
   return (
-    <div className="relative w-full h-screen bg-gray-900 text-white overflow-hidden font-sans">
+    <div className="relative w-full h-screen bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-white overflow-hidden font-sans transition-colors duration-500">
         {/* 3D Scene Background */}
         <div className="absolute inset-0 z-0">
              <Scene3D 
@@ -732,15 +732,15 @@ export const PickerInterface: React.FC<{ onSwitchToManager: () => void }> = ({ o
         {/* HUD - Header */}
         <div className="absolute top-0 left-0 right-0 p-4 flex justify-between items-start z-10 pointer-events-none">
              <div className="pointer-events-auto flex gap-2">
-                 <button onClick={() => setIsSetupOpen(true)} className="bg-gray-800 p-2 rounded-lg border border-gray-600 hover:bg-gray-700 shadow-lg text-[#4fc3f7]">
+                 <button onClick={() => setIsSetupOpen(true)} className="bg-white dark:bg-gray-800 p-2 rounded-lg border border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 shadow-lg text-[#4fc3f7] transition-colors">
                      <Home size={24} />
                  </button>
                  {!isSetupOpen && (
                      <>
-                        <button onClick={loadCloudData} className="bg-gray-800 p-2 rounded-lg border border-gray-600 hover:bg-gray-700 shadow-lg text-white">
+                        <button onClick={loadCloudData} className="bg-white dark:bg-gray-800 p-2 rounded-lg border border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 shadow-lg text-gray-700 dark:text-white transition-colors">
                             <RefreshCw size={24} className={isRefreshing ? "animate-spin" : ""} />
                         </button>
-                        <button onClick={() => setShowHistory(true)} className="bg-gray-800 p-2 rounded-lg border border-gray-600 hover:bg-gray-700 shadow-lg flex items-center gap-2 px-3">
+                        <button onClick={() => setShowHistory(true)} className="bg-white dark:bg-gray-800 p-2 rounded-lg border border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 shadow-lg flex items-center gap-2 px-3 text-gray-700 dark:text-white transition-colors">
                             <History size={24} /> <span className="hidden sm:inline font-bold">Histórico</span>
                         </button>
                      </>
@@ -749,8 +749,8 @@ export const PickerInterface: React.FC<{ onSwitchToManager: () => void }> = ({ o
              
              {/* Order Name Display */}
              {!isSetupOpen && (
-                <div className="bg-black/60 backdrop-blur px-4 py-2 rounded border border-white/10 shadow-lg pointer-events-auto max-w-xs truncate">
-                    <div className="text-xs text-gray-400 uppercase font-bold text-center">Pedido Atual</div>
+                <div className="bg-white/80 dark:bg-black/60 backdrop-blur px-4 py-2 rounded border border-gray-200 dark:border-white/10 shadow-lg pointer-events-auto max-w-xs truncate transition-colors">
+                    <div className="text-xs text-gray-500 dark:text-gray-400 uppercase font-bold text-center">Pedido Atual</div>
                     <h2 className="font-bold text-lg text-center text-[#ffeb3b]">{currentOrderName || "..."}</h2>
                 </div>
              )}
@@ -759,7 +759,7 @@ export const PickerInterface: React.FC<{ onSwitchToManager: () => void }> = ({ o
         {/* HUD - Task Info & Controls */}
         {currentTask && !isSetupOpen && !showFinishModal && (
             <div className="absolute bottom-0 left-0 right-0 p-6 z-10 pointer-events-none flex justify-center">
-                 <div className="bg-gray-900/95 backdrop-blur-md border border-gray-700 rounded-2xl p-6 max-w-2xl w-full pointer-events-auto shadow-2xl relative">
+                 <div className="bg-white/95 dark:bg-gray-900/95 backdrop-blur-md border border-gray-200 dark:border-gray-700 rounded-2xl p-6 max-w-2xl w-full pointer-events-auto shadow-2xl relative transition-colors duration-300">
                       
                       {/* Floating Buttons Group (Above QR) */}
                       <div className="absolute -top-16 right-0 flex gap-2 pointer-events-auto">
@@ -770,7 +770,7 @@ export const PickerInterface: React.FC<{ onSwitchToManager: () => void }> = ({ o
                               className={`p-3 rounded-full shadow-lg border flex items-center justify-center transition-all w-12 h-12 ${
                                 hasPickedItems 
                                     ? 'bg-[#00e676]/20 border-[#00e676] hover:bg-[#00e676]/30 text-[#00e676]' 
-                                    : 'bg-gray-800 border-gray-700 opacity-50 cursor-not-allowed text-gray-500'
+                                    : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 opacity-50 cursor-not-allowed text-gray-400 dark:text-gray-500'
                               }`}
                               title="Finalizar"
                           >
@@ -780,20 +780,20 @@ export const PickerInterface: React.FC<{ onSwitchToManager: () => void }> = ({ o
                           {/* Zoom Button */}
                           <button
                               onClick={() => setIsZoomedIn(!isZoomedIn)}
-                              className={`p-3 rounded-full shadow-lg border flex items-center justify-center transition-all w-12 h-12 ${isZoomedIn ? 'bg-[#4fc3f7]/20 border-[#4fc3f7] ring-2 ring-[#4fc3f7]/30' : 'bg-gray-800 hover:bg-gray-700 border-gray-600'}`}
+                              className={`p-3 rounded-full shadow-lg border flex items-center justify-center transition-all w-12 h-12 ${isZoomedIn ? 'bg-[#4fc3f7]/20 border-[#4fc3f7] ring-2 ring-[#4fc3f7]/30' : 'bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 border-gray-200 dark:border-gray-600'}`}
                               title="Zoom"
                           >
                               {isZoomedIn ? (
                                   <ZoomOut size={20} className="text-[#4fc3f7]" />
                               ) : (
-                                  <ZoomIn size={20} className="text-gray-300" />
+                                  <ZoomIn size={20} className="text-gray-500 dark:text-gray-300" />
                               )}
                           </button>
 
                           {/* Highlight Button */}
                           <button
                               onClick={() => setIsHighlightActive(!isHighlightActive)}
-                              className={`p-3 rounded-full shadow-lg border flex items-center justify-center transition-all w-12 h-12 ${isHighlightActive ? 'bg-yellow-500/20 border-yellow-400 ring-2 ring-yellow-400/50' : 'bg-gray-800 hover:bg-gray-700 border-gray-600'}`}
+                              className={`p-3 rounded-full shadow-lg border flex items-center justify-center transition-all w-12 h-12 ${isHighlightActive ? 'bg-yellow-500/20 border-yellow-400 ring-2 ring-yellow-400/50' : 'bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 border-gray-200 dark:border-gray-600'}`}
                               title="Destacar"
                           >
                               <Zap size={20} className={isHighlightActive ? "text-yellow-400 fill-yellow-400" : "text-gray-400"} />
@@ -802,7 +802,7 @@ export const PickerInterface: React.FC<{ onSwitchToManager: () => void }> = ({ o
                           {/* Search Button */}
                           <button
                               onClick={() => setShowSearchModal(true)}
-                              className="bg-gray-800 hover:bg-gray-700 p-3 rounded-full shadow-lg border border-gray-600 flex items-center justify-center w-12 h-12"
+                              className="bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 p-3 rounded-full shadow-lg border border-gray-200 dark:border-gray-600 flex items-center justify-center w-12 h-12 transition-colors"
                               title="Pesquisar"
                           >
                               <Search size={20} className="text-[#4fc3f7]" />
@@ -811,7 +811,7 @@ export const PickerInterface: React.FC<{ onSwitchToManager: () => void }> = ({ o
                           {/* List Button */}
                           <button 
                               onClick={() => { setShowTaskList(true); setListViewMode('detailed'); }}
-                              className="bg-gray-800 hover:bg-gray-700 p-3 rounded-full shadow-lg border border-gray-600 flex items-center justify-center w-12 h-12"
+                              className="bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 p-3 rounded-full shadow-lg border border-gray-200 dark:border-gray-600 flex items-center justify-center w-12 h-12 transition-colors"
                               title="Lista"
                           >
                               <List size={20} className="text-[#4fc3f7]" />
@@ -820,14 +820,14 @@ export const PickerInterface: React.FC<{ onSwitchToManager: () => void }> = ({ o
 
                       <div className="flex justify-between items-center mb-6">
                           <div>
-                              <div className="text-gray-400 text-sm uppercase font-bold tracking-wider">Passo {currentTask.sequence} de {pickingTasks.length}</div>
-                              <h1 className="text-3xl font-bold text-white">{currentTask.material}</h1>
+                              <div className="text-gray-500 dark:text-gray-400 text-sm uppercase font-bold tracking-wider">Passo {currentTask.sequence} de {pickingTasks.length}</div>
+                              <h1 className="text-3xl font-bold text-gray-900 dark:text-white">{currentTask.material}</h1>
                               <div className="text-[#4fc3f7] font-mono text-xl flex items-center gap-2">
                                   <MapPin size={18}/> {currentTask.bin}
                               </div>
                           </div>
                           <div className="text-right">
-                              <div className="text-gray-400 text-sm uppercase">Recolher</div>
+                              <div className="text-gray-500 dark:text-gray-400 text-sm uppercase">Recolher</div>
                               <div className="text-5xl font-bold text-[#00e676]">{currentTask.qtyToPick}</div>
                           </div>
                       </div>
@@ -836,14 +836,14 @@ export const PickerInterface: React.FC<{ onSwitchToManager: () => void }> = ({ o
                       <div className="flex flex-col gap-3">
                           <button 
                              onClick={() => { setScanMode('recommended'); setIsScannerOpen(true); }}
-                             className="w-full bg-[#0277bd] hover:bg-[#0288d1] py-4 rounded-xl font-bold flex justify-center items-center gap-2 shadow-lg shadow-blue-900/50 transition-colors text-lg"
+                             className="w-full bg-[#0277bd] hover:bg-[#0288d1] py-4 rounded-xl font-bold flex justify-center items-center gap-2 shadow-lg shadow-blue-900/20 dark:shadow-blue-900/50 transition-colors text-lg text-white"
                           >
                               <QrCode /> Scan Posição Recomendada
                           </button>
                           
                           <button 
                              onClick={() => { setScanMode('free'); setIsScannerOpen(true); }}
-                             className="w-full bg-gray-700 hover:bg-gray-600 border border-gray-600 py-3 rounded-xl font-bold flex justify-center items-center gap-2 transition-colors text-gray-300"
+                             className="w-full bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 border border-gray-300 dark:border-gray-600 py-3 rounded-xl font-bold flex justify-center items-center gap-2 transition-colors text-gray-700 dark:text-gray-300"
                           >
                               <Box size={20} /> Scan Livre (Outra Posição)
                           </button>
@@ -854,22 +854,22 @@ export const PickerInterface: React.FC<{ onSwitchToManager: () => void }> = ({ o
 
         {/* SEARCH MODAL */}
         {showSearchModal && (
-            <div className="absolute inset-0 z-50 bg-black/90 flex flex-col items-center justify-start p-4 pt-10">
-                <div className="w-full max-w-md bg-[#141923] border border-[#37474f] rounded-2xl flex flex-col shadow-2xl h-[70vh]">
-                    <div className="p-4 border-b border-[#37474f] flex justify-between items-center bg-[#1e2736] rounded-t-2xl">
-                        <h2 className="font-bold flex items-center gap-2"><Search className="text-[#4fc3f7]" /> Pesquisar</h2>
-                        <button onClick={() => { setShowSearchModal(false); setSearchQuery(''); setSearchResults([]); }} className="text-gray-400 hover:text-white">
+            <div className="absolute inset-0 z-50 bg-black/80 backdrop-blur-sm flex flex-col items-center justify-start p-4 pt-10">
+                <div className="w-full max-w-md bg-white dark:bg-[#141923] border border-gray-200 dark:border-[#37474f] rounded-2xl flex flex-col shadow-2xl h-[70vh] transition-colors">
+                    <div className="p-4 border-b border-gray-200 dark:border-[#37474f] flex justify-between items-center bg-gray-50 dark:bg-[#1e2736] rounded-t-2xl">
+                        <h2 className="font-bold flex items-center gap-2 text-gray-900 dark:text-white"><Search className="text-[#4fc3f7]" /> Pesquisar</h2>
+                        <button onClick={() => { setShowSearchModal(false); setSearchQuery(''); setSearchResults([]); }} className="text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white">
                             <X size={24} />
                         </button>
                     </div>
                     
-                    <div className="p-4 border-b border-[#37474f]">
+                    <div className="p-4 border-b border-gray-200 dark:border-[#37474f]">
                         <input 
                             type="text" 
                             placeholder="Material, Descrição ou Lote..."
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
-                            className="w-full bg-[#0f131a] border border-[#37474f] p-3 rounded-lg text-white focus:border-[#4fc3f7] focus:outline-none"
+                            className="w-full bg-gray-100 dark:bg-[#0f131a] border border-gray-300 dark:border-[#37474f] p-3 rounded-lg text-gray-900 dark:text-white focus:border-[#4fc3f7] focus:outline-none transition-colors"
                             autoFocus
                         />
                     </div>
@@ -884,24 +884,24 @@ export const PickerInterface: React.FC<{ onSwitchToManager: () => void }> = ({ o
                                 <div 
                                     key={idx} 
                                     onClick={() => {
-                                        // Move camera to this floor logic (simplified by just setting floor)
+                                        // Move camera to this floor logic
                                         const floor = FLOORS.find(f => result.x < f.maxX)?.id ?? 0;
                                         setVisibleFloor(floor);
                                         setShowSearchModal(false);
                                     }}
-                                    className="p-3 border-b border-[#37474f] hover:bg-[#1e2736] cursor-pointer last:border-0"
+                                    className="p-3 border-b border-gray-200 dark:border-[#37474f] hover:bg-gray-100 dark:hover:bg-[#1e2736] cursor-pointer last:border-0 transition-colors"
                                 >
                                     <div className="font-bold text-[#4fc3f7] flex items-center gap-2">
                                         <MapPin size={14} /> {result.bin}
                                     </div>
                                     {materialInfo ? (
                                         <div className="ml-5">
-                                            <div className="text-white font-bold text-sm">{materialInfo.material}</div>
-                                            <div className="text-gray-400 text-xs truncate">{materialInfo.description}</div>
+                                            <div className="text-gray-900 dark:text-white font-bold text-sm">{materialInfo.material}</div>
+                                            <div className="text-gray-500 dark:text-gray-400 text-xs truncate">{materialInfo.description}</div>
                                             <div className="text-xs text-[#00e676] mt-1">Qtd: {materialInfo.qtyAvailable}</div>
                                         </div>
                                     ) : (
-                                        <div className="ml-5 text-gray-500 text-xs italic">Posição Vazia</div>
+                                        <div className="ml-5 text-gray-400 dark:text-gray-500 text-xs italic">Posição Vazia</div>
                                     )}
                                 </div>
                             );
@@ -924,7 +924,6 @@ export const PickerInterface: React.FC<{ onSwitchToManager: () => void }> = ({ o
                     
                     {/* Camera Container */}
                     <div id="qr-reader" className="w-full aspect-square bg-black overflow-hidden relative">
-                        {/* Overlay elements if needed */}
                         <div className="absolute inset-0 border-2 border-[#4fc3f7]/30 pointer-events-none z-10 flex items-center justify-center">
                             <div className="w-64 h-64 border-2 border-[#4fc3f7] rounded-lg opacity-50"></div>
                         </div>
@@ -943,28 +942,28 @@ export const PickerInterface: React.FC<{ onSwitchToManager: () => void }> = ({ o
         {/* Custom Confirmation Modal */}
         {confirmModal.isOpen && (
             <div className="absolute inset-0 z-[60] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-                 <div className={`bg-[#141923] border-2 rounded-2xl w-full max-w-sm p-6 shadow-2xl ${
+                 <div className={`bg-white dark:bg-[#141923] border-2 rounded-2xl w-full max-w-sm p-6 shadow-2xl transition-colors ${
                      confirmModal.type === 'danger' ? 'border-red-500/50' : 
                      confirmModal.type === 'success' ? 'border-[#00e676]/50' : 'border-[#4fc3f7]/50'
                  }`}>
-                     <h3 className="text-xl font-bold mb-3 flex items-center gap-2 text-white">
+                     <h3 className="text-xl font-bold mb-3 flex items-center gap-2 text-gray-900 dark:text-white">
                          {confirmModal.type === 'danger' ? <AlertTriangle className="text-red-500" /> : 
                           confirmModal.type === 'success' ? <CheckCircle className="text-[#00e676]" /> : 
                           <AlertTriangle className="text-[#4fc3f7]" />}
                          {confirmModal.title}
                      </h3>
-                     <p className="text-gray-300 mb-6 text-sm">{confirmModal.message}</p>
+                     <p className="text-gray-600 dark:text-gray-300 mb-6 text-sm">{confirmModal.message}</p>
                      <div className="flex gap-3">
                          <button 
                             onClick={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))} 
-                            className="flex-1 bg-gray-700 py-3 rounded-lg font-bold hover:bg-gray-600"
+                            className="flex-1 bg-gray-200 dark:bg-gray-700 py-3 rounded-lg font-bold hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-800 dark:text-white transition-colors"
                          >
                              Não
                          </button>
                          <button 
                             onClick={confirmModal.onConfirm} 
-                            className={`flex-1 py-3 rounded-lg font-bold text-black ${
-                                confirmModal.type === 'danger' ? 'bg-red-500 hover:bg-red-400 text-white' : 
+                            className={`flex-1 py-3 rounded-lg font-bold text-white dark:text-black ${
+                                confirmModal.type === 'danger' ? 'bg-red-500 hover:bg-red-400' : 
                                 confirmModal.type === 'success' ? 'bg-[#00e676] hover:bg-[#00c853]' : 
                                 'bg-[#4fc3f7] hover:bg-[#29b6f6]'
                             }`}
@@ -979,17 +978,17 @@ export const PickerInterface: React.FC<{ onSwitchToManager: () => void }> = ({ o
         {/* Qty Confirmation Modal */}
         {showQtyModal && (
             <div className="absolute inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-                 <div className="bg-[#141923] border border-[#37474f] rounded-2xl w-full max-w-sm p-6 shadow-2xl">
-                     <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
+                 <div className="bg-white dark:bg-[#141923] border border-gray-200 dark:border-[#37474f] rounded-2xl w-full max-w-sm p-6 shadow-2xl transition-colors">
+                     <h3 className="text-xl font-bold mb-4 flex items-center gap-2 text-gray-900 dark:text-white">
                          <CheckCircle className="text-[#00e676]" /> Confirmar Qtd
                      </h3>
                      
                      {qtyMessage && (
                          <div className={`mb-4 p-3 rounded text-sm flex items-start gap-2 ${
-                             qtyMessageType === 'error' ? 'bg-red-500/20 text-red-400 border border-red-500/50' :
-                             qtyMessageType === 'warning' ? 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/50' :
-                             qtyMessageType === 'success' ? 'bg-green-500/20 text-green-400 border border-green-500/50' :
-                             'bg-blue-500/20 text-blue-400 border border-blue-500/50'
+                             qtyMessageType === 'error' ? 'bg-red-100 dark:bg-red-500/20 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-500/50' :
+                             qtyMessageType === 'warning' ? 'bg-yellow-100 dark:bg-yellow-500/20 text-yellow-600 dark:text-yellow-400 border border-yellow-200 dark:border-yellow-500/50' :
+                             qtyMessageType === 'success' ? 'bg-green-100 dark:bg-green-500/20 text-green-600 dark:text-green-400 border border-green-200 dark:border-green-500/50' :
+                             'bg-blue-100 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-500/50'
                          }`}>
                              {qtyMessageType === 'success' ? <CheckCircle size={16} className="mt-0.5 flex-shrink-0" /> : <AlertTriangle size={16} className="mt-0.5 flex-shrink-0" />}
                              {qtyMessage}
@@ -997,7 +996,7 @@ export const PickerInterface: React.FC<{ onSwitchToManager: () => void }> = ({ o
                      )}
 
                      <div className="mb-4">
-                         <label className="block text-gray-400 text-xs uppercase font-bold mb-2">Quantidade a Recolher</label>
+                         <label className="block text-gray-500 dark:text-gray-400 text-xs uppercase font-bold mb-2">Quantidade a Recolher</label>
                          <input 
                             type="number" 
                             value={qtyInput}
@@ -1010,19 +1009,19 @@ export const PickerInterface: React.FC<{ onSwitchToManager: () => void }> = ({ o
                                 }
                             }}
                             max={qtyMax}
-                            className="w-full bg-[#0f131a] border border-[#37474f] rounded-lg p-4 text-3xl font-bold text-center text-white focus:border-[#00e676] focus:outline-none mb-2"
+                            className="w-full bg-gray-100 dark:bg-[#0f131a] border border-gray-300 dark:border-[#37474f] rounded-lg p-4 text-3xl font-bold text-center text-gray-900 dark:text-white focus:border-[#00e676] focus:outline-none mb-2 transition-colors"
                          />
                          
                          {/* Stats Text */}
                          {tempTaskRef.current && (
-                             <div className="flex justify-between text-xs text-gray-400 px-2 font-mono">
+                             <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400 px-2 font-mono">
                                  <span>
-                                     Qtd. Pedida: <span className="text-white font-bold">
+                                     Qtd. Pedida: <span className="text-gray-900 dark:text-white font-bold">
                                          {orders.find(o => o.material === tempTaskRef.current?.material)?.qty || 0}
                                      </span>
                                  </span>
                                  <span>
-                                     Disp. Local: <span className="text-white font-bold">
+                                     Disp. Local: <span className="text-gray-900 dark:text-white font-bold">
                                          {qtyMax}
                                      </span>
                                  </span>
@@ -1031,7 +1030,7 @@ export const PickerInterface: React.FC<{ onSwitchToManager: () => void }> = ({ o
                      </div>
 
                      <div className="flex gap-3">
-                         <button onClick={() => setShowQtyModal(false)} className="flex-1 bg-gray-700 py-3 rounded-lg font-bold">Cancelar</button>
+                         <button onClick={() => setShowQtyModal(false)} className="flex-1 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-white py-3 rounded-lg font-bold hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors">Cancelar</button>
                          <button onClick={onQtyConfirm} className="flex-1 bg-[#00e676] text-black py-3 rounded-lg font-bold hover:bg-[#00c853]">Confirmar</button>
                      </div>
                  </div>
@@ -1041,12 +1040,12 @@ export const PickerInterface: React.FC<{ onSwitchToManager: () => void }> = ({ o
         {/* CUSTOM FINISH MODAL */}
         {showFinishModal && (
             <div className="absolute inset-0 z-50 bg-black/90 flex items-center justify-center p-4">
-                 <div className="bg-[#141923] border border-[#00e676] rounded-2xl w-full max-w-sm p-8 shadow-2xl flex flex-col items-center text-center">
+                 <div className="bg-white dark:bg-[#141923] border border-[#00e676] rounded-2xl w-full max-w-sm p-8 shadow-2xl flex flex-col items-center text-center transition-colors">
                      <div className="bg-[#00e676]/20 p-4 rounded-full mb-4">
                          <CheckCircle size={48} className="text-[#00e676]" />
                      </div>
-                     <h2 className="text-2xl font-bold text-white mb-2">Picking Concluído</h2>
-                     <p className="text-gray-400 mb-8">Todos os itens foram recolhidos com sucesso.</p>
+                     <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Picking Concluído</h2>
+                     <p className="text-gray-500 dark:text-gray-400 mb-8">Todos os itens foram recolhidos com sucesso.</p>
                      
                      <div className="w-full space-y-3">
                          <button 
@@ -1061,7 +1060,7 @@ export const PickerInterface: React.FC<{ onSwitchToManager: () => void }> = ({ o
                          <button 
                             onClick={handleKeepLocally}
                             disabled={isProcessing}
-                            className="w-full bg-gray-800 hover:bg-gray-700 border border-gray-600 text-gray-300 font-bold py-4 rounded-xl flex justify-center items-center gap-2 disabled:opacity-50"
+                            className="w-full bg-gray-200 dark:bg-gray-800 hover:bg-gray-300 dark:hover:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 font-bold py-4 rounded-xl flex justify-center items-center gap-2 disabled:opacity-50 transition-colors"
                          >
                              <Save size={20} /> Manter Localmente & Sair
                          </button>
@@ -1073,26 +1072,26 @@ export const PickerInterface: React.FC<{ onSwitchToManager: () => void }> = ({ o
         {/* Task List Modal */}
         {showTaskList && (
             <div className="absolute inset-0 z-40 bg-black/80 backdrop-blur-sm flex justify-end">
-                <div className="w-full max-w-md bg-[#141923] h-full border-l border-[#37474f] flex flex-col shadow-2xl slide-in-right">
-                    <div className="p-6 border-b border-[#37474f] bg-[#1e2736]">
+                <div className="w-full max-w-md bg-white dark:bg-[#141923] h-full border-l border-gray-200 dark:border-[#37474f] flex flex-col shadow-2xl slide-in-right transition-colors">
+                    <div className="p-6 border-b border-gray-200 dark:border-[#37474f] bg-gray-50 dark:bg-[#1e2736]">
                         <div className="flex justify-between items-center mb-4">
-                            <h2 className="text-xl font-bold flex items-center gap-2"><List className="text-[#4fc3f7]" /> Lista de Picking</h2>
-                            <button onClick={() => setShowTaskList(false)} className="text-gray-400 hover:text-white p-2">
+                            <h2 className="text-xl font-bold flex items-center gap-2 text-gray-900 dark:text-white"><List className="text-[#4fc3f7]" /> Lista de Picking</h2>
+                            <button onClick={() => setShowTaskList(false)} className="text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white p-2">
                                 <X size={24} />
                             </button>
                         </div>
                         
                         {/* Toggle */}
-                        <div className="flex bg-[#141923] p-1 rounded-lg border border-[#37474f]">
+                        <div className="flex bg-gray-200 dark:bg-[#141923] p-1 rounded-lg border border-gray-300 dark:border-[#37474f]">
                             <button 
                                 onClick={() => setListViewMode('detailed')}
-                                className={`flex-1 py-2 text-sm font-bold rounded-md transition-colors flex justify-center items-center gap-2 ${listViewMode === 'detailed' ? 'bg-[#0277bd] text-white shadow' : 'text-gray-400 hover:text-white'}`}
+                                className={`flex-1 py-2 text-sm font-bold rounded-md transition-colors flex justify-center items-center gap-2 ${listViewMode === 'detailed' ? 'bg-[#0277bd] text-white shadow' : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'}`}
                             >
                                 <Layers size={16} /> Detalhe (Lotes)
                             </button>
                             <button 
                                 onClick={() => setListViewMode('summary')}
-                                className={`flex-1 py-2 text-sm font-bold rounded-md transition-colors flex justify-center items-center gap-2 ${listViewMode === 'summary' ? 'bg-[#0277bd] text-white shadow' : 'text-gray-400 hover:text-white'}`}
+                                className={`flex-1 py-2 text-sm font-bold rounded-md transition-colors flex justify-center items-center gap-2 ${listViewMode === 'summary' ? 'bg-[#0277bd] text-white shadow' : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'}`}
                             >
                                 <AlignJustify size={16} /> Resumo
                             </button>
@@ -1102,16 +1101,16 @@ export const PickerInterface: React.FC<{ onSwitchToManager: () => void }> = ({ o
                     <div className="flex-1 overflow-y-auto p-4 space-y-2">
                         {listViewMode === 'summary' ? (
                             // Summary View Logic: Table of Material | Qtd Ordered | Qtd Picked
-                            <div className="bg-[#1e2736] rounded-lg border border-[#37474f] overflow-hidden">
+                            <div className="bg-gray-50 dark:bg-[#1e2736] rounded-lg border border-gray-200 dark:border-[#37474f] overflow-hidden">
                                 <table className="w-full text-left text-sm">
-                                    <thead className="bg-[#263238] text-gray-400 font-bold text-xs uppercase">
+                                    <thead className="bg-gray-100 dark:bg-[#263238] text-gray-500 dark:text-gray-400 font-bold text-xs uppercase">
                                         <tr>
                                             <th className="px-4 py-3">Material</th>
                                             <th className="px-4 py-3 text-center">Qtd Pedida</th>
                                             <th className="px-4 py-3 text-center">Qtd Recolhida</th>
                                         </tr>
                                     </thead>
-                                    <tbody className="divide-y divide-[#37474f]">
+                                    <tbody className="divide-y divide-gray-200 dark:divide-[#37474f]">
                                         {orders.map((orderItem, idx) => {
                                             // Calculate total picked for this material
                                             const picked = pickingTasks
@@ -1123,16 +1122,16 @@ export const PickerInterface: React.FC<{ onSwitchToManager: () => void }> = ({ o
                                             const isZero = picked === 0;
 
                                             return (
-                                                <tr key={idx} className="hover:bg-[#263238] transition-colors">
-                                                    <td className="px-4 py-3 font-mono font-bold text-white break-all">
+                                                <tr key={idx} className="hover:bg-gray-100 dark:hover:bg-[#263238] transition-colors">
+                                                    <td className="px-4 py-3 font-mono font-bold text-gray-900 dark:text-white break-all">
                                                         {orderItem.material}
                                                     </td>
-                                                    <td className="px-4 py-3 text-center text-gray-300">
+                                                    <td className="px-4 py-3 text-center text-gray-600 dark:text-gray-300">
                                                         {total}
                                                     </td>
                                                     <td className={`px-4 py-3 text-center font-bold ${
                                                         isComplete ? 'text-[#00e676]' : 
-                                                        isZero ? 'text-gray-500' : 'text-[#ffeb3b]'
+                                                        isZero ? 'text-gray-400 dark:text-gray-500' : 'text-yellow-600 dark:text-[#ffeb3b]'
                                                     }`}>
                                                         {picked}
                                                     </td>
@@ -1157,19 +1156,19 @@ export const PickerInterface: React.FC<{ onSwitchToManager: () => void }> = ({ o
                                                 setShowTaskList(false);
                                             }}
                                             className={`p-4 rounded-lg border cursor-pointer transition-colors ${
-                                                isCurrent ? 'bg-[#0277bd]/20 border-[#0277bd] ring-1 ring-[#0277bd]' : 
-                                                isCompleted ? 'bg-[#00e676]/5 border-[#00e676]/30 opacity-60' : 
-                                                'bg-[#1e2736] border-[#37474f] hover:bg-[#263238]'
+                                                isCurrent ? 'bg-[#0277bd]/10 dark:bg-[#0277bd]/20 border-[#0277bd] ring-1 ring-[#0277bd]' : 
+                                                isCompleted ? 'bg-green-50 dark:bg-[#00e676]/5 border-green-200 dark:border-[#00e676]/30 opacity-60' : 
+                                                'bg-white dark:bg-[#1e2736] border-gray-200 dark:border-[#37474f] hover:bg-gray-50 dark:hover:bg-[#263238]'
                                             }`}
                                         >
                                             <div className="flex justify-between items-center mb-1">
-                                                <span className={`font-bold ${isCurrent ? 'text-white' : 'text-gray-300'}`}>
+                                                <span className={`font-bold ${isCurrent ? 'text-blue-600 dark:text-white' : 'text-gray-700 dark:text-gray-300'}`}>
                                                     {idx + 1}. {task.material}
                                                 </span>
                                                 {isCompleted && <CheckCircle size={16} className="text-[#00e676]" />}
-                                                {isCurrent && <span className="text-xs bg-[#0277bd] px-2 py-0.5 rounded font-bold">ATUAL</span>}
+                                                {isCurrent && <span className="text-xs bg-[#0277bd] text-white px-2 py-0.5 rounded font-bold">ATUAL</span>}
                                             </div>
-                                            <div className="flex justify-between text-sm text-gray-400 font-mono">
+                                            <div className="flex justify-between text-sm text-gray-500 dark:text-gray-400 font-mono">
                                                 <span>{task.bin}</span>
                                                 <span>Qtd: {task.qtyToPick}</span>
                                             </div>
@@ -1179,14 +1178,14 @@ export const PickerInterface: React.FC<{ onSwitchToManager: () => void }> = ({ o
 
                                 {/* Skipped Items Section */}
                                 {skippedItems.length > 0 && (
-                                    <div className="mt-6 pt-4 border-t border-[#37474f]">
-                                        <h3 className="text-red-400 font-bold text-sm mb-3 flex items-center gap-2">
+                                    <div className="mt-6 pt-4 border-t border-gray-200 dark:border-[#37474f]">
+                                        <h3 className="text-red-500 dark:text-red-400 font-bold text-sm mb-3 flex items-center gap-2">
                                             <EyeOff size={16} /> ITENS SEM LOCALIZAÇÃO ({skippedItems.length})
                                         </h3>
                                         {skippedItems.map((item, idx) => (
-                                            <div key={`skipped-${idx}`} className="p-3 bg-red-900/10 border border-red-900/30 rounded-lg mb-2 opacity-75">
-                                                <div className="font-bold text-gray-300">{item.material}</div>
-                                                <div className="text-xs text-gray-500">Qtd Requerida: {item.qty}</div>
+                                            <div key={`skipped-${idx}`} className="p-3 bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-900/30 rounded-lg mb-2 opacity-75">
+                                                <div className="font-bold text-gray-800 dark:text-gray-300">{item.material}</div>
+                                                <div className="text-xs text-gray-600 dark:text-gray-500">Qtd Requerida: {item.qty}</div>
                                             </div>
                                         ))}
                                     </div>
@@ -1201,12 +1200,12 @@ export const PickerInterface: React.FC<{ onSwitchToManager: () => void }> = ({ o
         {/* Main Menu / Setup Modal */}
         {isSetupOpen && (
             <div className="absolute inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-                 <div className="bg-[#141923] border border-[#37474f] rounded-2xl w-full max-w-md p-6 shadow-2xl flex flex-col max-h-[90vh] relative">
+                 <div className="bg-white dark:bg-[#141923] border border-gray-200 dark:border-[#37474f] rounded-2xl w-full max-w-md p-6 shadow-2xl flex flex-col max-h-[90vh] relative transition-colors">
                      {/* Close Button if session active */}
                      {pickingTasks.length > 0 && (
                          <button 
                             onClick={() => setIsSetupOpen(false)}
-                            className="absolute top-4 right-4 text-gray-400 hover:text-white p-2 bg-[#263238] rounded-full"
+                            className="absolute top-4 right-4 text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white p-2 bg-gray-100 dark:bg-[#263238] rounded-full transition-colors"
                          >
                              <X size={24} />
                          </button>
@@ -1217,7 +1216,7 @@ export const PickerInterface: React.FC<{ onSwitchToManager: () => void }> = ({ o
                          <button 
                             onClick={loadCloudData} 
                             disabled={isRefreshing}
-                            className="p-1.5 bg-[#1e2736] hover:bg-[#263238] border border-[#37474f] rounded-md text-[#4fc3f7] transition-colors disabled:opacity-50"
+                            className="p-1.5 bg-gray-100 dark:bg-[#1e2736] hover:bg-gray-200 dark:hover:bg-[#263238] border border-gray-200 dark:border-[#37474f] rounded-md text-[#4fc3f7] transition-colors disabled:opacity-50"
                             title="Atualizar Pedidos"
                          >
                              <RefreshCw size={14} className={isRefreshing ? "animate-spin" : ""} />
@@ -1225,7 +1224,7 @@ export const PickerInterface: React.FC<{ onSwitchToManager: () => void }> = ({ o
                      </div>
                      
                      <div className="space-y-4 flex-1 overflow-y-auto min-h-0">
-                         <div className="bg-[#1e2736] border border-[#37474f] rounded-lg overflow-hidden flex flex-col h-full max-h-[400px]">
+                         <div className="bg-gray-50 dark:bg-[#1e2736] border border-gray-200 dark:border-[#37474f] rounded-lg overflow-hidden flex flex-col h-full max-h-[400px]">
                             <div className="overflow-y-auto flex-1 p-2 space-y-2 custom-scrollbar">
                                 {sortedOrders.map(order => {
                                     const isActive = order.status === 'IN PROCESS';
@@ -1237,41 +1236,41 @@ export const PickerInterface: React.FC<{ onSwitchToManager: () => void }> = ({ o
                                             onClick={() => handleOrderSelect(order.id)}
                                             className={`p-3 rounded-lg cursor-pointer transition-all border 
                                                 ${isSelected ? 'bg-[#0277bd]/10 border-[#0277bd] ring-1 ring-[#0277bd]' : 
-                                                  isActive ? 'bg-yellow-500/5 border-yellow-500/30' : 
-                                                  'bg-[#141923] border-[#37474f] hover:bg-[#263238]'}
+                                                  isActive ? 'bg-yellow-500/10 dark:bg-yellow-500/5 border-yellow-500/30' : 
+                                                  'bg-white dark:bg-[#141923] border-gray-200 dark:border-[#37474f] hover:bg-gray-100 dark:hover:bg-[#263238]'}
                                             `}
                                         >
                                             <div className="flex justify-between items-center mb-1">
-                                                <span className={`font-bold ${isSelected ? 'text-white' : isActive ? 'text-yellow-400' : 'text-gray-300'}`}>
+                                                <span className={`font-bold ${isSelected ? 'text-blue-600 dark:text-white' : isActive ? 'text-yellow-600 dark:text-yellow-400' : 'text-gray-700 dark:text-gray-300'}`}>
                                                     {order.name}
                                                 </span>
-                                                {isActive && <span className="text-[10px] bg-yellow-500/20 text-yellow-400 px-2 py-0.5 rounded border border-yellow-500/30 font-bold">EM PROCESSO</span>}
+                                                {isActive && <span className="text-[10px] bg-yellow-100 dark:bg-yellow-500/20 text-yellow-600 dark:text-yellow-400 px-2 py-0.5 rounded border border-yellow-200 dark:border-yellow-500/30 font-bold">EM PROCESSO</span>}
                                             </div>
                                             <div className="flex justify-between items-center text-xs">
                                                 <div className="flex items-center gap-1 text-gray-500">
                                                     <Clock size={12} />
                                                     <span>{new Date(order.createdAt).toLocaleDateString()}</span>
                                                 </div>
-                                                <span className="bg-[#37474f] px-2 py-0.5 rounded text-gray-300">{order.items.length} itens</span>
+                                                <span className="bg-gray-100 dark:bg-[#37474f] px-2 py-0.5 rounded text-gray-600 dark:text-gray-300">{order.items.length} itens</span>
                                             </div>
 
                                             {/* Expanded Detail View */}
                                             {isSelected && (
-                                                <div className="mt-3 pt-3 border-t border-[#37474f] animate-fadeIn">
-                                                    <div className="flex justify-between text-xs text-gray-400 mb-2">
+                                                <div className="mt-3 pt-3 border-t border-gray-200 dark:border-[#37474f] animate-fadeIn">
+                                                    <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400 mb-2">
                                                         <span className="flex items-center gap-1"><Calendar size={12}/> Data: {new Date(order.createdAt).toLocaleDateString()}</span>
                                                     </div>
                                                     
-                                                    <div className="bg-[#0f131a] rounded p-2 max-h-32 overflow-y-auto custom-scrollbar border border-[#37474f]">
+                                                    <div className="bg-gray-100 dark:bg-[#0f131a] rounded p-2 max-h-32 overflow-y-auto custom-scrollbar border border-gray-200 dark:border-[#37474f]">
                                                         <table className="w-full text-xs text-left">
-                                                            <thead className="text-gray-500 sticky top-0 bg-[#0f131a]">
+                                                            <thead className="text-gray-500 sticky top-0 bg-gray-100 dark:bg-[#0f131a]">
                                                                 <tr>
                                                                     <th className="pb-1 font-bold">Material</th>
                                                                     <th className="pb-1 text-right font-bold">Qtd</th>
                                                                     <th className="pb-1 text-right font-bold">Recolhido</th>
                                                                 </tr>
                                                             </thead>
-                                                            <tbody className="text-gray-300">
+                                                            <tbody className="text-gray-700 dark:text-gray-300">
                                                                 {order.items.map((item, idx) => {
                                                                     // Calculate picked qty dynamically if this is the current active session
                                                                     let currentPicked = 0;
@@ -1284,10 +1283,10 @@ export const PickerInterface: React.FC<{ onSwitchToManager: () => void }> = ({ o
                                                                     }
 
                                                                     return (
-                                                                        <tr key={idx} className="border-b border-gray-800 last:border-0">
+                                                                        <tr key={idx} className="border-b border-gray-200 dark:border-gray-800 last:border-0">
                                                                             <td className="py-1 truncate max-w-[120px]">{item.material}</td>
-                                                                            <td className="py-1 text-right font-mono text-gray-400">{item.qty}</td>
-                                                                            <td className={`py-1 text-right font-mono font-bold ${isFinished ? 'text-[#00e676]' : currentPicked > 0 ? 'text-yellow-400' : 'text-gray-600'}`}>
+                                                                            <td className="py-1 text-right font-mono text-gray-500 dark:text-gray-400">{item.qty}</td>
+                                                                            <td className={`py-1 text-right font-mono font-bold ${isFinished ? 'text-[#00e676]' : currentPicked > 0 ? 'text-yellow-500 dark:text-yellow-400' : 'text-gray-400 dark:text-gray-600'}`}>
                                                                                 {selectedOrderId === currentSessionId ? currentPicked : '-'}
                                                                             </td>
                                                                         </tr>
@@ -1328,14 +1327,14 @@ export const PickerInterface: React.FC<{ onSwitchToManager: () => void }> = ({ o
                                             <button 
                                                 onClick={() => handleRevertOrder(selectedOrderId)}
                                                 disabled={isProcessing}
-                                                className="flex-1 bg-red-900/30 hover:bg-red-900/50 text-red-400 border border-red-900/50 font-bold py-3 rounded-xl flex justify-center items-center gap-2 disabled:opacity-50"
+                                                className="flex-1 bg-red-100 dark:bg-red-900/30 hover:bg-red-200 dark:hover:bg-red-900/50 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-900/50 font-bold py-3 rounded-xl flex justify-center items-center gap-2 disabled:opacity-50 transition-colors"
                                             >
                                                 {isProcessing ? <Loader2 className="animate-spin" size={18} /> : <Trash2 size={18} />} Cancelar
                                             </button>
                                             <button 
                                                 onClick={() => handleForceFinish(selectedOrderId)}
                                                 disabled={isProcessing}
-                                                className="flex-1 bg-green-900/30 hover:bg-green-900/50 text-green-400 border border-green-900/50 font-bold py-3 rounded-xl flex justify-center items-center gap-2 disabled:opacity-50"
+                                                className="flex-1 bg-green-100 dark:bg-green-900/30 hover:bg-green-200 dark:hover:bg-green-900/50 text-green-600 dark:text-green-400 border border-green-200 dark:border-green-900/50 font-bold py-3 rounded-xl flex justify-center items-center gap-2 disabled:opacity-50 transition-colors"
                                             >
                                                 {isProcessing ? <Loader2 className="animate-spin" size={18} /> : <Upload size={18} />} Finalizar
                                             </button>
@@ -1353,7 +1352,7 @@ export const PickerInterface: React.FC<{ onSwitchToManager: () => void }> = ({ o
                              </>
                          )}
                          
-                         <div className="border-t border-[#37474f] mt-4 pt-4">
+                         <div className="border-t border-gray-200 dark:border-[#37474f] mt-4 pt-4">
                              <button 
                                 onClick={onSwitchToManager} 
                                 className="w-full bg-[#0277bd]/10 hover:bg-[#0277bd]/20 text-[#4fc3f7] border border-[#0277bd]/30 py-3 rounded-lg font-bold flex justify-center items-center gap-2 transition-colors text-sm"
