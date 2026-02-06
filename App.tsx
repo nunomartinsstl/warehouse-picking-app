@@ -1,12 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { PickerInterface } from './components/PickerInterface';
 import { ManagerPlatform } from './components/ManagerPlatform';
-import { Lock, ArrowRight, ArrowLeft, Mail, LogIn, Loader2, LogOut, User as UserIcon, Eye, EyeOff } from 'lucide-react';
+import { ReceiverInterface } from './components/ReceiverInterface';
+import { Lock, ArrowRight, ArrowLeft, Mail, LogIn, Loader2, LogOut, User as UserIcon, Eye, EyeOff, Package, Archive, Box } from 'lucide-react';
 import { authenticateUser, auth, fetchUserProfile, signOutUser } from './utils/firebase';
 import { User as UserType } from './types';
 
 const App: React.FC = () => {
-  const [authStage, setAuthStage] = useState<'loading' | 'company_select' | 'login' | 'app'>('loading');
+  // Added 'mode_select' to authStage
+  const [authStage, setAuthStage] = useState<'loading' | 'company_select' | 'login' | 'mode_select' | 'app'>('loading');
   const [selectedCompany, setSelectedCompany] = useState<{id: string, name: string} | null>(null);
   
   // Login Form State
@@ -17,7 +19,11 @@ const App: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [currentUser, setCurrentUser] = useState<UserType | null>(null);
   
+  // View State
   const [view, setView] = useState<'picker' | 'manager'>('picker');
+  
+  // New: Application Mode (Picking vs Receiving)
+  const [appMode, setAppMode] = useState<'picking' | 'receiving'>('picking');
   
   // Logo State
   const [logoError, setLogoError] = useState(false);
@@ -53,7 +59,8 @@ const App: React.FC = () => {
                   const companyName = dbUser.companyId === '1' ? 'SETLING AVAC' : 'SETLING HOTELARIA';
                   setSelectedCompany({ id: dbUser.companyId, name: companyName });
                   
-                  setAuthStage('app');
+                  // Go to Mode Selection instead of direct app
+                  setAuthStage('mode_select');
               } catch (err) {
                   console.error("Auto-login failed:", err);
                   // Force logout if profile is invalid
@@ -92,7 +99,7 @@ const App: React.FC = () => {
         // Pass password to authenticateUser
         const user = await authenticateUser(identifier, password, selectedCompany.id);
         setCurrentUser(user);
-        setAuthStage('app');
+        setAuthStage('mode_select'); // Go to mode selection
         setView('picker');
     } catch (err: any) {
         console.error(err);
@@ -109,6 +116,11 @@ const App: React.FC = () => {
       setSelectedCompany(null);
       setAuthStage('company_select');
       setView('picker');
+  };
+
+  const selectMode = (mode: 'picking' | 'receiving') => {
+      setAppMode(mode);
+      setAuthStage('app');
   };
 
   if (authStage === 'loading') {
@@ -262,6 +274,49 @@ const App: React.FC = () => {
     );
   }
 
+  // --- NEW: MODE SELECTION SCREEN ---
+  if (authStage === 'mode_select') {
+      return (
+          <div className="w-full h-screen bg-gray-900 text-white flex flex-col items-center justify-center p-6 font-sans">
+              <div className="mb-12 text-center">
+                  <h2 className="text-3xl font-bold mb-2">Bem-vindo</h2>
+                  <p className="text-gray-400">Selecione o modo de operação</p>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 w-full max-w-2xl">
+                  <button 
+                    onClick={() => selectMode('picking')}
+                    className="bg-gray-800 hover:bg-[#4fc3f7]/10 border-2 border-gray-700 hover:border-[#4fc3f7] p-8 rounded-2xl flex flex-col items-center gap-4 transition-all group"
+                  >
+                      <div className="bg-gray-700 group-hover:bg-[#4fc3f7] p-6 rounded-full transition-colors">
+                          <Package size={40} className="text-white" />
+                      </div>
+                      <h3 className="text-2xl font-bold">Picking</h3>
+                      <p className="text-gray-500 text-sm text-center">Recolha de encomendas e saída de material</p>
+                  </button>
+
+                  <button 
+                    onClick={() => selectMode('receiving')}
+                    className="bg-gray-800 hover:bg-[#00e676]/10 border-2 border-gray-700 hover:border-[#00e676] p-8 rounded-2xl flex flex-col items-center gap-4 transition-all group"
+                  >
+                      <div className="bg-gray-700 group-hover:bg-[#00e676] p-6 rounded-full transition-colors">
+                          <Archive size={40} className="text-white" />
+                      </div>
+                      <h3 className="text-2xl font-bold">Entrada</h3>
+                      <p className="text-gray-500 text-sm text-center">Receção e arrumação de material em stock</p>
+                  </button>
+              </div>
+
+              <button 
+                onClick={handleLogout}
+                className="mt-12 text-gray-500 hover:text-white flex items-center gap-2 text-sm"
+              >
+                  <LogOut size={16} /> Terminar Sessão
+              </button>
+          </div>
+      );
+  }
+
   // --- APP LAYOUT ---
   return (
       <div className="relative w-full h-full bg-gray-900 text-white transition-colors">
@@ -277,6 +332,15 @@ const App: React.FC = () => {
                 </div>
               )}
 
+              {/* Mode Switcher Button (Only visible if already in app) */}
+              <button
+                onClick={() => setAuthStage('mode_select')}
+                className="bg-gray-800 hover:bg-gray-700 border border-gray-600 p-2 rounded-full shadow-lg backdrop-blur-sm transition-all text-gray-300"
+                title="Mudar Modo"
+              >
+                  {appMode === 'picking' ? <Package size={20} /> : <Archive size={20} />}
+              </button>
+
               <button 
                 onClick={handleLogout}
                 className="bg-red-900/30 hover:bg-red-900/50 text-red-400 p-2 rounded-full border border-red-900/50 shadow-lg backdrop-blur-sm transition-all"
@@ -286,7 +350,10 @@ const App: React.FC = () => {
               </button>
           </div>
 
-          {view === 'manager' ? (
+          {/* Conditional Rendering based on Mode */}
+          {appMode === 'receiving' ? (
+              <ReceiverInterface onBack={() => setAuthStage('mode_select')} />
+          ) : view === 'manager' ? (
              <ManagerPlatform onBack={() => setView('picker')} />
           ) : (
              <PickerInterface 

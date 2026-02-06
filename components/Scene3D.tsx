@@ -5,48 +5,6 @@ import * as THREE from 'three';
 import { LayoutNode, PickingTask, WarehouseLayout, Unit } from '../types';
 import { FLOORS } from '../utils/optimizer';
 
-// Fix for missing R3F types in this context
-// We need to augment both global JSX and React module JSX to cover different TS environments
-declare global {
-  namespace JSX {
-    interface IntrinsicElements {
-      group: any;
-      mesh: any;
-      boxGeometry: any;
-      meshStandardMaterial: any;
-      lineSegments: any;
-      edgesGeometry: any;
-      lineBasicMaterial: any;
-      planeGeometry: any;
-      meshBasicMaterial: any;
-      ambientLight: any;
-      pointLight: any;
-      directionalLight: any;
-      sphereGeometry: any;
-    }
-  }
-}
-
-declare module 'react' {
-  namespace JSX {
-    interface IntrinsicElements {
-      group: any;
-      mesh: any;
-      boxGeometry: any;
-      meshStandardMaterial: any;
-      lineSegments: any;
-      edgesGeometry: any;
-      lineBasicMaterial: any;
-      planeGeometry: any;
-      meshBasicMaterial: any;
-      ambientLight: any;
-      pointLight: any;
-      directionalLight: any;
-      sphereGeometry: any;
-    }
-  }
-}
-
 interface SceneProps {
   visualLayout: WarehouseLayout | null;
   layoutCoords: Map<string, LayoutNode>;

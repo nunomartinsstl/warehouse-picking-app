@@ -116,3 +116,19 @@ export interface CloudOrder {
     excelReport?: string; // Base64 string of the generated Excel file
     isUploaded?: boolean; // Local state flag
 }
+
+// --- RECEIPT TYPES ---
+export interface ReceiptItem {
+    id: string;
+    bin: string;
+    material: string;
+    qty: number;
+}
+
+export interface ReceiptData {
+    poNumber: string;
+    documentImage: string; // Base64 JPEG
+    items: ReceiptItem[];
+    date: string;
+    userId: string;
+}

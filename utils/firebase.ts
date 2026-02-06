@@ -1,7 +1,7 @@
 import firebase from 'firebase/compat/app';
 import 'firebase/compat/database';
 import 'firebase/compat/auth';
-import { User, StockItem, CloudOrder, OrderItem, PickingTask } from '../types';
+import { User, StockItem, CloudOrder, OrderItem, PickingTask, ReceiptData } from '../types';
 
 // --- FIREBASE CONFIGURATION ---
 const firebaseConfig = {
@@ -159,6 +159,46 @@ export const saveStockToCloud = async (stock: StockItem[]) => {
         console.error("Error saving stock:", e);
         throw e;
     }
+};
+
+// --- RECEIPT FUNCTIONS (ENTRADA) ---
+
+export const submitReceipt = async (receipt: ReceiptData) => {
+    const database = ensureDb();
+    
+    // 1. Save the Receipt Record
+    const receiptRef = database.ref('nexus_receipts').push();
+    await receiptRef.set({
+        ...receipt,
+        id: receiptRef.key
+    });
+
+    // 2. Update Stock Levels
+    // We fetch current stock, update it, and save it back.
+    // Note: In a high concurrency environment, we would use transactions per item, 
+    // but for this app, reading and writing the whole array is the established pattern.
+    const currentStock = await fetchStockFromCloud();
+    const updatedStock = [...currentStock];
+
+    receipt.items.forEach(newItem => {
+        const existingIndex = updatedStock.findIndex(s => s.material === newItem.material && s.bin === newItem.bin);
+        
+        if (existingIndex > -1) {
+            // Update existing
+            updatedStock[existingIndex].qtyAvailable += newItem.qty;
+        } else {
+            // Create new
+            updatedStock.push({
+                material: newItem.material,
+                description: '', // Optional: fetch description if we had a master data table
+                bin: newItem.bin,
+                qtyAvailable: newItem.qty
+            });
+        }
+    });
+
+    await saveStockToCloud(updatedStock);
+    console.log("Receipt processed and stock updated.");
 };
 
 // --- ORDER FUNCTIONS ---
