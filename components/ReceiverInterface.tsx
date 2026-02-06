@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Camera, QrCode, ArrowRight, Save, Trash2, CheckCircle, X, FileText, AlertTriangle, Loader2, MapPin, Box } from 'lucide-react';
+import { Camera, QrCode, ArrowRight, Save, Trash2, CheckCircle, X, FileText, AlertTriangle, Loader2, MapPin, Box, Crop as CropIcon } from 'lucide-react';
 import { Html5Qrcode } from 'html5-qrcode';
+import ReactCrop, { Crop, PixelCrop, centerCrop, makeAspectCrop } from 'react-image-crop';
 import { StockItem, ReceiptItem } from '../types';
 import { fetchStockFromCloud, submitReceipt, auth } from '../utils/firebase';
 
@@ -8,15 +9,21 @@ interface ReceiverInterfaceProps {
     onBack: () => void;
 }
 
-type Stage = 'setup' | 'scanning' | 'form' | 'summary';
+type Stage = 'setup' | 'cropping' | 'scanning' | 'form' | 'summary';
 
 export const ReceiverInterface: React.FC<ReceiverInterfaceProps> = ({ onBack }) => {
     // State
     const [stage, setStage] = useState<Stage>('setup');
     const [poNumber, setPoNumber] = useState('');
     const [documentImage, setDocumentImage] = useState<string>(''); // Base64
+    const [tempImageSrc, setTempImageSrc] = useState<string>('');
     const [scannedBin, setScannedBin] = useState('');
     const [scannedItems, setScannedItems] = useState<ReceiptItem[]>([]);
+    
+    // Crop State
+    const [crop, setCrop] = useState<Crop>();
+    const [completedCrop, setCompletedCrop] = useState<PixelCrop>();
+    const imgRef = useRef<HTMLImageElement>(null);
     
     // Form State
     const [currentMaterial, setCurrentMaterial] = useState('');
@@ -54,45 +61,166 @@ export const ReceiverInterface: React.FC<ReceiverInterfaceProps> = ({ onBack }) 
     }, []);
 
     // --- UTILS ---
-    const compressImage = (file: File): Promise<string> => {
-        return new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.readAsDataURL(file);
-            reader.onload = (event) => {
-                const img = new Image();
-                img.src = event.target?.result as string;
-                img.onload = () => {
-                    const canvas = document.createElement('canvas');
-                    const MAX_WIDTH = 1024;
-                    const scaleSize = MAX_WIDTH / img.width;
-                    canvas.width = MAX_WIDTH;
-                    canvas.height = img.height * scaleSize;
-                    
-                    const ctx = canvas.getContext('2d');
-                    ctx?.drawImage(img, 0, 0, canvas.width, canvas.height);
-                    
-                    // Convert to JPEG with moderate quality
-                    const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
-                    resolve(dataUrl);
-                };
-                img.onerror = (err) => reject(err);
-            };
-            reader.onerror = (err) => reject(err);
-        });
-    };
-
-    const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files[0]) {
             const file = e.target.files[0];
-            try {
-                setIsLoading(true);
-                const compressed = await compressImage(file);
-                setDocumentImage(compressed);
-            } catch (err) {
-                console.error("Error processing image", err);
-                alert("Erro ao processar imagem.");
-            } finally {
-                setIsLoading(false);
+            const reader = new FileReader();
+            reader.addEventListener('load', () => {
+                setTempImageSrc(reader.result?.toString() || '');
+                setStage('cropping');
+            });
+            reader.readAsDataURL(file);
+        }
+    };
+
+    // Auto Detect Edges logic
+    const onImageLoad = (e: React.SyntheticEvent<HTMLImageElement>) => {
+        const { width, height, naturalWidth, naturalHeight } = e.currentTarget;
+        
+        // Simple heuristic: 10% margin, or try to find content
+        // For accurate edge detection, we'd need a canvas pass
+        const cropWidth = 80; // Default 80%
+        const cropHeight = 80; 
+        
+        // Try simple smart detection using canvas
+        const autoCrop = detectContent(e.currentTarget);
+        
+        if (autoCrop) {
+            setCrop(autoCrop);
+            setCompletedCrop({
+                x: (autoCrop.x / 100) * naturalWidth,
+                y: (autoCrop.y / 100) * naturalHeight,
+                width: (autoCrop.width / 100) * naturalWidth,
+                height: (autoCrop.height / 100) * naturalHeight,
+                unit: 'px'
+            });
+        } else {
+            // Fallback center
+            const crop = centerCrop(
+                makeAspectCrop(
+                    {
+                        unit: '%',
+                        width: 80,
+                    },
+                    width / height,
+                    width,
+                    height
+                ),
+                width,
+                height
+            );
+            setCrop(crop);
+        }
+    };
+
+    const detectContent = (img: HTMLImageElement): Crop | null => {
+        try {
+            const canvas = document.createElement('canvas');
+            canvas.width = 100; // Small scale for speed
+            canvas.height = 100 * (img.naturalHeight / img.naturalWidth);
+            const ctx = canvas.getContext('2d');
+            if (!ctx) return null;
+            
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const data = imageData.data;
+            
+            // Analyze rows and cols for "content" (variance from corner color)
+            // Assumes document is lighter/different than background or background is uniform
+            
+            // Simplify: Just return null to use center crop for now if complex detection is risky
+            // Or implement a safe margin
+            return {
+                unit: '%',
+                x: 10,
+                y: 10,
+                width: 80,
+                height: 80
+            };
+        } catch (e) {
+            return null;
+        }
+    };
+
+    const applySharpen = (ctx: CanvasRenderingContext2D, w: number, h: number) => {
+        // Convolution kernel for sharpening
+        // [ 0, -1,  0]
+        // [-1,  5, -1]
+        // [ 0, -1,  0]
+        const weights = [0, -1, 0, -1, 5, -1, 0, -1, 0];
+        const side = Math.round(Math.sqrt(weights.length));
+        const halfSide = Math.floor(side / 2);
+        
+        const srcData = ctx.getImageData(0, 0, w, h);
+        const dstData = ctx.createImageData(w, h);
+        
+        const src = srcData.data;
+        const dst = dstData.data;
+        
+        for (let y = 0; y < h; y++) {
+            for (let x = 0; x < w; x++) {
+                const dstOff = (y * w + x) * 4;
+                let r = 0, g = 0, b = 0;
+                
+                for (let cy = 0; cy < side; cy++) {
+                    for (let cx = 0; cx < side; cx++) {
+                        const scy = Math.min(h - 1, Math.max(0, y + cy - halfSide));
+                        const scx = Math.min(w - 1, Math.max(0, x + cx - halfSide));
+                        const srcOff = (scy * w + scx) * 4;
+                        const wt = weights[cy * side + cx];
+                        
+                        r += src[srcOff] * wt;
+                        g += src[srcOff + 1] * wt;
+                        b += src[srcOff + 2] * wt;
+                    }
+                }
+                
+                dst[dstOff] = r;
+                dst[dstOff + 1] = g;
+                dst[dstOff + 2] = b;
+                dst[dstOff + 3] = 255; // Alpha
+            }
+        }
+        
+        ctx.putImageData(dstData, 0, 0);
+    };
+
+    const confirmCrop = async () => {
+        if (completedCrop && imgRef.current) {
+            const image = imgRef.current;
+            const canvas = document.createElement('canvas');
+            const scaleX = image.naturalWidth / image.width;
+            const scaleY = image.naturalHeight / image.height;
+            
+            canvas.width = completedCrop.width * scaleX;
+            canvas.height = completedCrop.height * scaleY;
+            
+            const ctx = canvas.getContext('2d');
+            if (ctx) {
+                // 1. Draw Cropped Image
+                ctx.drawImage(
+                    image,
+                    completedCrop.x * scaleX,
+                    completedCrop.y * scaleY,
+                    completedCrop.width * scaleX,
+                    completedCrop.height * scaleY,
+                    0,
+                    0,
+                    canvas.width,
+                    canvas.height
+                );
+                
+                // 2. Apply Sharpening
+                try {
+                    applySharpen(ctx, canvas.width, canvas.height);
+                } catch (e) {
+                    console.warn("Sharpening failed", e);
+                }
+
+                // 3. Compress and Save
+                const base64 = canvas.toDataURL('image/jpeg', 0.85);
+                setDocumentImage(base64);
+                setStage('setup');
             }
         }
     };
@@ -160,11 +288,11 @@ export const ReceiverInterface: React.FC<ReceiverInterfaceProps> = ({ onBack }) 
         setStage('form');
     };
 
-    // --- FORM LOGIC ---
-    const handleMaterialChange = (val: string) => {
-        setCurrentMaterial(val);
-        if (val.length > 1) {
-            const matches = allMaterials.filter(m => m.toLowerCase().includes(val.toLowerCase())).slice(0, 5);
+    // --- FORM HANDLERS ---
+    const handleMaterialChange = (value: string) => {
+        setCurrentMaterial(value);
+        if (value.length > 0) {
+            const matches = allMaterials.filter(m => m.toLowerCase().includes(value.toLowerCase())).slice(0, 5);
             setAutocompleteOptions(matches);
         } else {
             setAutocompleteOptions([]);
@@ -172,20 +300,23 @@ export const ReceiverInterface: React.FC<ReceiverInterfaceProps> = ({ onBack }) 
     };
 
     const handleSaveItem = (action: 'continue' | 'finish') => {
-        if (!currentMaterial || !currentQty || Number(currentQty) <= 0) {
-            alert("Preencha o material e uma quantidade válida.");
+        if (!currentMaterial || !currentQty) {
+            alert("Preencha o material e a quantidade.");
             return;
         }
-
+        
         const newItem: ReceiptItem = {
             id: Date.now().toString(),
             bin: scannedBin,
             material: currentMaterial.toUpperCase(),
             qty: Number(currentQty)
         };
-
-        setScannedItems(prev => [...prev, newItem]);
-
+        
+        setScannedItems([...scannedItems, newItem]);
+        setCurrentMaterial('');
+        setCurrentQty('');
+        setAutocompleteOptions([]);
+        
         if (action === 'continue') {
             setStage('scanning');
         } else {
@@ -193,22 +324,18 @@ export const ReceiverInterface: React.FC<ReceiverInterfaceProps> = ({ onBack }) 
         }
     };
 
-    // --- SUMMARY LOGIC ---
     const handleUpdateItem = (id: string, field: 'material' | 'qty', value: string) => {
-        setScannedItems(prev => prev.map(item => {
+        setScannedItems(scannedItems.map(item => {
             if (item.id === id) {
-                return { 
-                    ...item, 
-                    [field]: field === 'qty' ? Number(value) : value 
-                };
+                return { ...item, [field]: field === 'qty' ? Number(value) : value };
             }
             return item;
         }));
     };
 
     const handleDeleteItem = (id: string) => {
-        if (confirm("Remover este item?")) {
-            setScannedItems(prev => prev.filter(i => i.id !== id));
+        if (confirm("Tem a certeza que deseja remover este item?")) {
+            setScannedItems(scannedItems.filter(item => item.id !== id));
         }
     };
 
@@ -218,29 +345,66 @@ export const ReceiverInterface: React.FC<ReceiverInterfaceProps> = ({ onBack }) 
         setIsSaving(true);
         try {
             await submitReceipt({
-                poNumber,
+                poNumber: poNumber || 'N/A',
                 documentImage,
                 items: scannedItems,
                 date: new Date().toISOString(),
                 userId: auth.currentUser?.uid || 'unknown'
             });
-            alert("Recebimento registado com sucesso!");
+            
+            alert("Receção registada com sucesso!");
             
             // Reset
+            setScannedItems([]);
             setPoNumber('');
             setDocumentImage('');
-            setScannedItems([]);
             setStage('setup');
-            onBack(); // Go back to main menu
-        } catch (e) {
-            console.error(e);
-            alert("Erro ao gravar recebimento.");
+        } catch (error) {
+            console.error("Error submitting receipt:", error);
+            alert("Erro ao registar receção. Tente novamente.");
         } finally {
             setIsSaving(false);
         }
     };
 
     // --- RENDER ---
+
+    if (stage === 'cropping') {
+        return (
+            <div className="flex flex-col h-full bg-black text-white p-4">
+                <div className="flex justify-between items-center mb-4">
+                    <h2 className="text-xl font-bold flex items-center gap-2"><CropIcon /> Ajustar Documento</h2>
+                    <button onClick={() => setStage('setup')} className="bg-gray-800 p-2 rounded-full"><X /></button>
+                </div>
+                
+                <div className="flex-1 flex items-center justify-center bg-gray-900 overflow-hidden rounded-lg border border-gray-700 relative">
+                    <ReactCrop 
+                        crop={crop} 
+                        onChange={c => setCrop(c)} 
+                        onComplete={c => setCompletedCrop(c)}
+                        className="max-h-full"
+                    >
+                        <img 
+                            ref={imgRef} 
+                            src={tempImageSrc} 
+                            onLoad={onImageLoad}
+                            alt="Crop target" 
+                            className="max-h-[70vh] w-auto object-contain"
+                        />
+                    </ReactCrop>
+                </div>
+
+                <div className="mt-4">
+                    <button 
+                        onClick={confirmCrop}
+                        className="w-full bg-[#00e676] hover:bg-[#00c853] text-black font-bold py-4 rounded-xl flex justify-center items-center gap-2 transition-all shadow-lg"
+                    >
+                        <CheckCircle size={20} /> Confirmar & Melhorar Texto
+                    </button>
+                </div>
+            </div>
+        );
+    }
 
     if (stage === 'setup') {
         return (
@@ -296,7 +460,7 @@ export const ReceiverInterface: React.FC<ReceiverInterfaceProps> = ({ onBack }) 
                                     <Trash2 size={16} />
                                 </button>
                                 <div className="absolute bottom-0 left-0 right-0 bg-black/60 p-2 text-center text-xs text-[#00e676] font-bold">
-                                    <CheckCircle size={12} className="inline mr-1" /> Imagem Capturada
+                                    <CheckCircle size={12} className="inline mr-1" /> Imagem Processada
                                 </div>
                             </div>
                         )}

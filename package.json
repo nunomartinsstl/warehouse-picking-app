@@ -18,7 +18,8 @@
     "html5-qrcode": "^2.3.8",
     "firebase": "^10.12.3",
     "clsx": "^2.1.1",
-    "tailwind-merge": "^2.3.0"
+    "tailwind-merge": "^2.3.0",
+    "react-image-crop": "^11.0.5"
   },
   "devDependencies": {
     "@types/react": "^18.3.3",
