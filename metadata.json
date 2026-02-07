@@ -1,6 +1,6 @@
 {
-  "name": "Setling Picking",
-  "description": "3D Warehouse visualization and picking route optimization tool connected to Cloud data.",
+  "name": "Setling Picking & Entradas",
+  "description": "3D Warehouse visualization, picking optimization, and stock receiving tool.",
   "requestFramePermissions": [
     "camera"
   ]
