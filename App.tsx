@@ -352,7 +352,10 @@ const App: React.FC = () => {
 
           {/* Conditional Rendering based on Mode */}
           {appMode === 'receiving' ? (
-              <ReceiverInterface onBack={() => setAuthStage('mode_select')} />
+              <ReceiverInterface 
+                  onBack={() => setAuthStage('mode_select')} 
+                  user={currentUser}
+              />
           ) : view === 'manager' ? (
              <ManagerPlatform onBack={() => setView('picker')} />
           ) : (
