@@ -59,7 +59,6 @@ const App: React.FC = () => {
                   const companyName = dbUser.companyId === '1' ? 'SETLING AVAC' : 'SETLING HOTELARIA';
                   setSelectedCompany({ id: dbUser.companyId, name: companyName });
                   
-                  // Go to Mode Selection instead of direct app
                   setAuthStage('mode_select');
               } catch (err) {
                   console.error("Auto-login failed:", err);
@@ -334,7 +333,9 @@ const App: React.FC = () => {
 
               {/* Mode Switcher Button (Only visible if already in app) */}
               <button
-                onClick={() => setAuthStage('mode_select')}
+                onClick={() => {
+                    setAuthStage('mode_select');
+                }}
                 className="bg-gray-800 hover:bg-gray-700 border border-gray-600 p-2 rounded-full shadow-lg backdrop-blur-sm transition-all text-gray-300"
                 title="Mudar Modo"
               >
@@ -353,7 +354,9 @@ const App: React.FC = () => {
           {/* Conditional Rendering based on Mode */}
           {appMode === 'receiving' ? (
               <ReceiverInterface 
-                  onBack={() => setAuthStage('mode_select')} 
+                  onBack={() => {
+                      setAuthStage('mode_select');
+                  }} 
                   user={currentUser}
               />
           ) : view === 'manager' ? (

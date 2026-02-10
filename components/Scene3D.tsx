@@ -26,6 +26,26 @@ declare global {
   }
 }
 
+declare module 'react' {
+  namespace JSX {
+    interface IntrinsicElements {
+      ambientLight: any;
+      pointLight: any;
+      directionalLight: any;
+      group: any;
+      mesh: any;
+      boxGeometry: any;
+      meshStandardMaterial: any;
+      lineSegments: any;
+      edgesGeometry: any;
+      lineBasicMaterial: any;
+      planeGeometry: any;
+      meshBasicMaterial: any;
+      sphereGeometry: any;
+    }
+  }
+}
+
 interface SceneProps {
   visualLayout: WarehouseLayout | null;
   layoutCoords: Map<string, LayoutNode>;

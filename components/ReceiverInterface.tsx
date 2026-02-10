@@ -70,6 +70,16 @@ export const ReceiverInterface: React.FC<ReceiverInterfaceProps> = ({ onBack, us
         loadData();
     }, []);
 
+    // Draft Persistence for PO (Safety against camera reload)
+    useEffect(() => {
+        const savedPO = localStorage.getItem('setling_draft_po');
+        if (savedPO && !poNumber) setPoNumber(savedPO);
+    }, []);
+
+    useEffect(() => {
+        localStorage.setItem('setling_draft_po', poNumber);
+    }, [poNumber]);
+
     // --- IMAGE UTILS ---
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files[0]) {
@@ -306,6 +316,7 @@ export const ReceiverInterface: React.FC<ReceiverInterfaceProps> = ({ onBack, us
             // Reset
             setScannedItems([]);
             setPoNumber('');
+            localStorage.removeItem('setling_draft_po');
             setDocumentImage('');
             setStage('setup');
         } catch (error) {
@@ -400,13 +411,13 @@ export const ReceiverInterface: React.FC<ReceiverInterfaceProps> = ({ onBack, us
 
                 <div className="space-y-6 max-w-md mx-auto w-full">
                     <div>
-                        <label className="block text-gray-400 text-xs uppercase font-bold mb-2">Pedido de Compra (Opcional)</label>
+                        <label className="block text-gray-400 text-xs uppercase font-bold mb-2">Pedido de Compra <span className="text-red-500">*</span></label>
                         <input 
                             type="text" 
                             value={poNumber}
                             onChange={(e) => setPoNumber(e.target.value)}
                             placeholder="Ex: PO-2023-999"
-                            className="w-full bg-gray-800 border border-gray-700 rounded-xl p-4 text-white placeholder-gray-600 focus:border-[#4fc3f7] focus:outline-none transition-colors"
+                            className={`w-full bg-gray-800 border rounded-xl p-4 text-white placeholder-gray-600 focus:outline-none transition-colors ${!poNumber && documentImage ? 'border-red-500/50' : 'border-gray-700 focus:border-[#4fc3f7]'}`}
                         />
                     </div>
 
@@ -452,13 +463,17 @@ export const ReceiverInterface: React.FC<ReceiverInterfaceProps> = ({ onBack, us
 
                     <div className="pt-6">
                         <button 
-                            disabled={!documentImage}
+                            disabled={!documentImage || !poNumber.trim()}
                             onClick={() => { setStage('location_input'); }}
                             className="w-full bg-[#00e676] hover:bg-[#00c853] text-black font-bold py-4 rounded-xl flex justify-center items-center gap-2 transition-all shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                             <Box size={20} /> Arrumar Materiais
                         </button>
-                        {!documentImage && <p className="text-center text-xs text-gray-500 mt-2">Digitalize o documento para continuar.</p>}
+                        {(!documentImage || !poNumber.trim()) && (
+                            <p className="text-center text-xs text-gray-500 mt-2">
+                                {!poNumber.trim() ? "Preencha o Nº do Pedido de Compra." : "Digitalize o documento para continuar."}
+                            </p>
+                        )}
                     </div>
                 </div>
             </div>
