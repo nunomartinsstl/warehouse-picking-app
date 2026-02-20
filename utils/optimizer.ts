@@ -42,6 +42,7 @@ export const reorderRemainingTasks = (
         let minDist = Infinity;
 
         for (let i = 0; i < pool.length; i++) {
+            if (!pool[i].coordinates || !isFinite(pool[i].coordinates.x)) continue;
             const dist = getDistance(currentPos, pool[i].coordinates);
             if (dist < minDist) {
                 minDist = dist;
@@ -87,7 +88,7 @@ export const generatePickingList = (
     remainingOrders.some(o => o.material === s.material)
   ).map(s => {
     const coords = layout.get(s.bin);
-    if (!coords) return null;
+    if (!coords || !isFinite(coords.x) || !isFinite(coords.y) || !isFinite(coords.z)) return null;
     return {
       ...s,
       ...coords,

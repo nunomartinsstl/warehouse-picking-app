@@ -672,7 +672,18 @@ export const PickerInterface: React.FC<{ onSwitchToManager: () => void; companyL
                       
                       <div className="absolute -top-16 right-0 flex gap-2 pointer-events-auto">
                           <button
-                              onClick={() => setShowFinishModal(true)}
+                              onClick={() => {
+                                  setConfirmModal({
+                                      isOpen: true,
+                                      title: 'Finalizar Picking',
+                                      message: 'Tem a certeza que deseja concluir o picking desta encomenda?',
+                                      type: 'warning',
+                                      onConfirm: () => {
+                                          setConfirmModal(prev => ({ ...prev, isOpen: false }));
+                                          setShowFinishModal(true);
+                                      }
+                                  });
+                              }}
                               disabled={!hasPickedItems}
                               className={`p-3 rounded-full shadow-lg border flex items-center justify-center transition-all w-12 h-12 ${
                                 hasPickedItems 
@@ -1161,7 +1172,18 @@ export const PickerInterface: React.FC<{ onSwitchToManager: () => void; companyL
                      
                      <div className="w-full space-y-3">
                          <button 
-                            onClick={() => finishOrder(pickingTasks)}
+                            onClick={() => {
+                                setConfirmModal({
+                                    isOpen: true,
+                                    title: 'Concluir Encomenda',
+                                    message: 'Tem a certeza que deseja finalizar a encomenda e enviar para a Cloud?',
+                                    type: 'success',
+                                    onConfirm: () => {
+                                        setConfirmModal(prev => ({ ...prev, isOpen: false }));
+                                        finishOrder(pickingTasks);
+                                    }
+                                });
+                            }}
                             disabled={isProcessing}
                             className="w-full bg-[#00e676] hover:bg-[#00c853] text-black font-bold py-4 rounded-xl flex justify-center items-center gap-2 disabled:opacity-50"
                          >

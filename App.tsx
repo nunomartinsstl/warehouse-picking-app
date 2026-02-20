@@ -291,7 +291,6 @@ const App: React.FC = () => {
                           <Package size={40} className="text-white" />
                       </div>
                       <h3 className="text-2xl font-bold">Picking</h3>
-                      <p className="text-gray-500 text-sm text-center">Recolha de encomendas e saída de material</p>
                   </button>
 
                   <button 
@@ -302,7 +301,6 @@ const App: React.FC = () => {
                           <Archive size={40} className="text-white" />
                       </div>
                       <h3 className="text-2xl font-bold">Entrada</h3>
-                      <p className="text-gray-500 text-sm text-center">Receção e arrumação de material em stock</p>
                   </button>
               </div>
 

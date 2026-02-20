@@ -22,6 +22,7 @@ declare global {
       planeGeometry: any;
       meshBasicMaterial: any;
       sphereGeometry: any;
+      gridHelper: any;
     }
   }
 }
@@ -42,6 +43,7 @@ declare module 'react' {
       planeGeometry: any;
       meshBasicMaterial: any;
       sphereGeometry: any;
+      gridHelper: any;
     }
   }
 }
@@ -319,7 +321,7 @@ const RackUnit: React.FC<{ unit: Unit; colors: Record<string, string>; dimmed?: 
     shelves.push(
       <mesh key={`shelf-${l}`} position={[0, l * size, 0]}>
         <boxGeometry args={[rackWidth, 0.08, rackDepth]} />
-        <meshStandardMaterial color="#455a64" roughness={0.5} metalness={0.5} {...structuralMatProps} />
+        <meshStandardMaterial color="#90a4ae" roughness={0.3} metalness={0.6} {...structuralMatProps} />
       </mesh>
     );
   }
@@ -338,7 +340,7 @@ const RackUnit: React.FC<{ unit: Unit; colors: Record<string, string>; dimmed?: 
   const uprights = uprightPositions.map((pos, idx) => (
     <mesh key={`u${idx}`} position={[pos[0], pos[1], pos[2]]}>
       <boxGeometry args={[0.15, rackHeight, 0.15]} />
-      <meshStandardMaterial color="#263238" roughness={0.8} {...structuralMatProps} />
+      <meshStandardMaterial color="#546e7a" roughness={0.5} {...structuralMatProps} />
     </mesh>
   ));
 
@@ -471,29 +473,34 @@ const WarehouseContent: React.FC<SceneProps> = ({ visualLayout, layoutCoords, ta
 
     if (isZoomedIn && focusedTaskIndex !== null && tasks[focusedTaskIndex]) {
         const task = tasks[focusedTaskIndex];
-        const taskPos = new THREE.Vector3(task.coordinates.x, task.coordinates.y, task.coordinates.z);
-        target.copy(taskPos);
-        pos.set(taskPos.x + 10, taskPos.y + 10, taskPos.z + 10);
+        if (task && task.coordinates && isFinite(task.coordinates.x) && isFinite(task.coordinates.y) && isFinite(task.coordinates.z)) {
+            const taskPos = new THREE.Vector3(task.coordinates.x, task.coordinates.y, task.coordinates.z);
+            target.copy(taskPos);
+            pos.set(taskPos.x + 10, taskPos.y + 10, taskPos.z + 10);
+        }
     } else if (visibleFloor !== null) {
         const units = visualLayout.units.filter(u => u.floorIndex === visibleFloor);
         if (units.length > 0) {
-             const xs = units.map(u => u.posX);
-             const zs = units.map(u => u.posZ);
-             const minX = Math.min(...xs);
-             const maxX = Math.max(...xs);
-             const minZ = Math.min(...zs);
-             const maxZ = Math.max(...zs);
+             const xs = units.map(u => u.posX).filter(isFinite);
+             const zs = units.map(u => u.posZ).filter(isFinite);
              
-             target.set((minX + maxX) / 2, -20, (minZ + maxZ) / 2);
-             
-             const sizeX = maxX - minX;
-             const sizeZ = maxZ - minZ;
-             const maxDim = Math.max(sizeX, sizeZ);
-             
-             pos.set(target.x, maxDim * 2.0 + 80, target.z + maxDim * 1.8 + 80);
+             if (xs.length > 0 && zs.length > 0) {
+                 const minX = Math.min(...xs);
+                 const maxX = Math.max(...xs);
+                 const minZ = Math.min(...zs);
+                 const maxZ = Math.max(...zs);
+                 
+                 target.set((minX + maxX) / 2, -20, (minZ + maxZ) / 2);
+                 
+                 const sizeX = maxX - minX;
+                 const sizeZ = maxZ - minZ;
+                 const maxDim = Math.max(sizeX, sizeZ);
+                 
+                 pos.set(target.x, maxDim * 2.0 + 80, target.z + maxDim * 1.8 + 80);
+             }
         } else {
              const f = FLOORS.find(fl => fl.id === visibleFloor);
-             if(f) {
+             if(f && isFinite(f.start.x) && isFinite(f.start.z)) {
                  target.set(f.start.x, -20, f.start.z);
                  pos.set(f.start.x, 150, f.start.z + 150);
              }
@@ -503,13 +510,16 @@ const WarehouseContent: React.FC<SceneProps> = ({ visualLayout, layoutCoords, ta
         pos.set(60, 200, 200);
     }
 
-    if (controlsRef.current) {
-        controlsRef.current.target.copy(target);
-        controlsRef.current.update();
+    // Final safety check to prevent WebGL crash from NaN
+    if (isFinite(target.x) && isFinite(target.y) && isFinite(target.z) &&
+        isFinite(pos.x) && isFinite(pos.y) && isFinite(pos.z)) {
+        if (controlsRef.current) {
+            controlsRef.current.target.copy(target);
+            controlsRef.current.update();
+        }
+        camera.position.copy(pos);
+        camera.lookAt(target);
     }
-    
-    camera.position.copy(pos);
-    camera.lookAt(target);
 
   }, [visibleFloor, visualLayout, camera, isZoomedIn, focusedTaskIndex]);
 
@@ -526,10 +536,25 @@ const WarehouseContent: React.FC<SceneProps> = ({ visualLayout, layoutCoords, ta
             
             if (floorUnits.length > 0) {
                 floorUnits.forEach(u => {
-                    minX = Math.min(minX, u.posX);
-                    maxX = Math.max(maxX, u.posX);
-                    minZ = Math.min(minZ, u.posZ);
-                    maxZ = Math.max(maxZ, u.posZ);
+                    let maxBays = u.params.bays;
+                    let maxBins = u.params.bins;
+                    if (u.params.levelConfig) {
+                        maxBays = Math.max(...u.params.levelConfig.map(l => l.bays));
+                        maxBins = Math.max(...u.params.levelConfig.map(l => l.bins));
+                    }
+                    const w = maxBays * u.params.size;
+                    const d = maxBins * u.params.size;
+                    
+                    const rot = Math.abs(u.rotY);
+                    const isRotated = (Math.abs(rot - Math.PI/2) < 0.1 || Math.abs(rot - 3*Math.PI/2) < 0.1);
+                    
+                    const finalW = isRotated ? d : w;
+                    const finalD = isRotated ? w : d;
+
+                    minX = Math.min(minX, u.posX - finalW/2);
+                    maxX = Math.max(maxX, u.posX + finalW/2);
+                    minZ = Math.min(minZ, u.posZ - finalD/2);
+                    maxZ = Math.max(maxZ, u.posZ + finalD/2);
                 });
             } else {
                 minX = 0; maxX = 50; minZ = 0; maxZ = 50;
@@ -542,23 +567,20 @@ const WarehouseContent: React.FC<SceneProps> = ({ visualLayout, layoutCoords, ta
                 maxZ = Math.max(maxZ, floorDef.start.z);
             }
 
-            const padding = 15;
+            const padding = 5;
             const width = (maxX - minX) + padding * 2;
             const depth = (maxZ - minZ) + padding * 2;
             const centerX = (minX + maxX) / 2;
             const centerZ = (minZ + maxZ) / 2;
 
-            const finalWidth = Math.max(width, 60);
-            const finalDepth = Math.max(depth, 60);
-
             return (
                 <group key={floor.id}>
                     <mesh rotation={[-Math.PI / 2, 0, 0]} position={[centerX, -0.1, centerZ]}>
-                        <planeGeometry args={[finalWidth, finalDepth]} />
-                        <meshBasicMaterial color="#000000" />
+                        <planeGeometry args={[width, depth]} />
+                        <meshBasicMaterial color="#1a1a1a" />
                     </mesh>
                     <Text 
-                        position={[centerX, 0.2, minZ - 10]} 
+                        position={[centerX, 0.2, minZ - 2]} 
                         rotation={[-Math.PI / 2, 0, 0]} 
                         fontSize={4} 
                         color="#4fc3f7"
@@ -612,6 +634,10 @@ const WarehouseContent: React.FC<SceneProps> = ({ visualLayout, layoutCoords, ta
         currentSegmentStart = new THREE.Vector3(currentTask.coordinates.x, currentTask.coordinates.y, currentTask.coordinates.z);
     }
 
+    // Limit A* calculations for future paths to prevent main thread freezing
+    const MAX_ASTAR_FUTURE_PATHS = 2;
+    let astarCount = 0;
+
     for (let i = focusedTaskIndex + 1; i < tasks.length; i++) {
         const prevTask = tasks[i-1];
         const t = tasks[i];
@@ -627,8 +653,14 @@ const WarehouseContent: React.FC<SceneProps> = ({ visualLayout, layoutCoords, ta
                 const doorPos = new THREE.Vector3(floor.start.x, floor.start.y, floor.start.z);
                 const taskPos = new THREE.Vector3(t.coordinates.x, t.coordinates.y, t.coordinates.z);
                 
-                const segment = generatePathSegment(doorPos, taskPos, t.floorId);
-                future.push(segment);
+                if (astarCount < MAX_ASTAR_FUTURE_PATHS) {
+                    const segment = generatePathSegment(doorPos, taskPos, t.floorId);
+                    future.push(segment);
+                    astarCount++;
+                } else {
+                    // Fallback to direct line for performance
+                    future.push([doorPos, new THREE.Vector3(doorPos.x, 0.5, taskPos.z), taskPos]);
+                }
                 
                 currentSegmentStart = taskPos;
             }
@@ -637,11 +669,14 @@ const WarehouseContent: React.FC<SceneProps> = ({ visualLayout, layoutCoords, ta
                 const startPos = currentSegmentStart || new THREE.Vector3(prevTask.coordinates.x, prevTask.coordinates.y, prevTask.coordinates.z);
                 const endPos = new THREE.Vector3(t.coordinates.x, t.coordinates.y, t.coordinates.z);
                 
-                const intermediate = generatePathSegment(startPos, endPos, t.floorId);
-                
-                // For future paths, we just push the whole calculated segment as a separate line to avoid complex merging logic
-                // that might look weird with A* simplifications
-                future.push(intermediate);
+                if (astarCount < MAX_ASTAR_FUTURE_PATHS) {
+                    const intermediate = generatePathSegment(startPos, endPos, t.floorId);
+                    future.push(intermediate);
+                    astarCount++;
+                } else {
+                    // Fallback to direct line for performance
+                    future.push([startPos, new THREE.Vector3(startPos.x, 0.5, endPos.z), endPos]);
+                }
                 
                 currentSegmentStart = endPos;
             } else {
@@ -662,9 +697,9 @@ const WarehouseContent: React.FC<SceneProps> = ({ visualLayout, layoutCoords, ta
         enablePan={false} 
         maxPolarAngle={Math.PI / 2} 
       />
-      <ambientLight intensity={0.7} />
-      <pointLight position={[0, 50, 0]} intensity={0.5} />
-      <directionalLight position={[100, 100, 50]} intensity={0.8} castShadow />
+      <ambientLight intensity={0.9} />
+      <pointLight position={[0, 50, 0]} intensity={0.6} />
+      <directionalLight position={[100, 100, 50]} intensity={1} castShadow />
 
       {floorMeshes}
 
@@ -685,6 +720,7 @@ const WarehouseContent: React.FC<SceneProps> = ({ visualLayout, layoutCoords, ta
       {/* Tasks */}
       {tasks.map((task, idx) => {
         if (visibleFloor !== null && task.floorId !== visibleFloor) return null;
+        if (!task.coordinates || !isFinite(task.coordinates.x) || !isFinite(task.coordinates.y) || !isFinite(task.coordinates.z)) return null;
 
         const isFocused = focusedTaskIndex === idx;
         const color = isFocused ? "#00e676" : "#ff9800"; 
