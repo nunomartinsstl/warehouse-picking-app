@@ -839,6 +839,7 @@ export const PickerInterface: React.FC<{ onSwitchToManager: () => void; companyL
                                                                     <tr>
                                                                         <th className="pb-1 font-bold">Material</th>
                                                                         <th className="pb-1 text-right font-bold">Qtd</th>
+                                                                        <th className="pb-1 text-right font-bold">Stock Total</th>
                                                                         <th className="pb-1 text-right font-bold">Recolhido</th>
                                                                     </tr>
                                                                 </thead>
@@ -847,6 +848,11 @@ export const PickerInterface: React.FC<{ onSwitchToManager: () => void; companyL
                                                                         let currentPicked = 0;
                                                                         let isFinished = false;
                                                                         
+                                                                        // Calculate total available stock for this material
+                                                                        const totalStock = stock
+                                                                            .filter(s => s.material === item.material)
+                                                                            .reduce((acc, s) => acc + s.qtyAvailable, 0);
+
                                                                         if (selectedOrderId === currentSessionId) {
                                                                             const tasksForMaterial = pickingTasks.filter(t => t.material === item.material && t.status === 'picked');
                                                                             currentPicked = tasksForMaterial.reduce((acc, t) => acc + (t.pickedQty || 0), 0);
@@ -857,6 +863,9 @@ export const PickerInterface: React.FC<{ onSwitchToManager: () => void; companyL
                                                                             <tr key={idx} className="border-b border-gray-200 dark:border-gray-800 last:border-0">
                                                                                 <td className="py-1 truncate max-w-[120px]">{item.material}</td>
                                                                                 <td className="py-1 text-right font-mono text-gray-500 dark:text-gray-400">{item.qty}</td>
+                                                                                <td className={`py-1 text-right font-mono font-bold ${totalStock < item.qty ? 'text-red-500' : 'text-gray-500 dark:text-gray-400'}`}>
+                                                                                    {totalStock}
+                                                                                </td>
                                                                                 <td className={`py-1 text-right font-mono font-bold ${isFinished ? 'text-[#00e676]' : currentPicked > 0 ? 'text-yellow-500 dark:text-yellow-400' : 'text-gray-400 dark:text-gray-600'}`}>
                                                                                     {selectedOrderId === currentSessionId ? currentPicked : '-'}
                                                                                 </td>
@@ -925,7 +934,14 @@ export const PickerInterface: React.FC<{ onSwitchToManager: () => void; companyL
                          </div>
                      </>
                      
-                     <div className="border-t border-gray-200 dark:border-[#37474f] mt-4 pt-4">
+                     <div className="border-t border-gray-200 dark:border-[#37474f] mt-4 pt-4 flex flex-col gap-2">
+                         <button 
+                            onClick={() => setShowSearchModal(true)} 
+                            className="w-full bg-gray-100 dark:bg-[#1e2736] hover:bg-gray-200 dark:hover:bg-[#263238] text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-[#37474f] py-3 rounded-lg font-bold flex justify-center items-center gap-2 transition-colors text-sm"
+                         >
+                             <Search size={18} /> Pesquisar Stock
+                         </button>
+
                          <button 
                             onClick={onSwitchToManager} 
                             className="w-full bg-[#0277bd]/10 hover:bg-[#0277bd]/20 text-[#4fc3f7] border border-[#0277bd]/30 py-3 rounded-lg font-bold flex justify-center items-center gap-2 transition-colors text-sm"

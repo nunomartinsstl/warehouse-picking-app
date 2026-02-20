@@ -85,7 +85,7 @@ export const generatePickingList = (
 
   // 1. Enrich stock with coordinates and Floor ID
   let enrichedStock = stock.filter(s => 
-    remainingOrders.some(o => o.material === s.material)
+    remainingOrders.some(o => o.material === s.material) && s.qtyAvailable > 0
   ).map(s => {
     const coords = layout.get(s.bin);
     if (!coords || !isFinite(coords.x) || !isFinite(coords.y) || !isFinite(coords.z)) return null;
