@@ -5,7 +5,7 @@ import { LayoutNode, OrderItem, PickingTask, StockItem, CloudOrder, WarehouseLay
 import { generatePickingList, reorderRemainingTasks, FLOORS } from '../utils/optimizer';
 import { fetchStockFromCloud, fetchOpenOrdersFromCloud, markOrderComplete, updateOrderStatus } from '../utils/firebase';
 import { DEFAULT_LAYOUT_COORDS, DEFAULT_VISUAL_LAYOUT } from '../utils/defaults';
-import { Home, CheckCircle, Navigation, Package, ArrowRight, ArrowLeft, Clock, QrCode, List, X, RefreshCw, History, AlertTriangle, Box, MapPin, Play, Trash2, Upload, EyeOff, Save, AlignJustify, Layers, Loader2, Zap, ZoomIn, ZoomOut, CheckCheck, Calendar, Search, Cloud } from 'lucide-react';
+import { Home, CheckCircle, Navigation, Package, ArrowRight, ArrowLeft, Clock, QrCode, List, X, RefreshCw, History, AlertTriangle, Box, MapPin, Play, Trash2, Upload, EyeOff, Save, AlignJustify, Layers, Loader2, Zap, ZoomIn, ZoomOut, Calendar, Search } from 'lucide-react';
 import { Html5Qrcode } from 'html5-qrcode';
 
 export const PickerInterface: React.FC<{ onSwitchToManager: () => void; companyLogo?: string }> = ({ onSwitchToManager, companyLogo }) => {
@@ -692,7 +692,7 @@ export const PickerInterface: React.FC<{ onSwitchToManager: () => void; companyL
                               }`}
                               title="Finalizar"
                           >
-                              <CheckCheck size={20} />
+                              <CheckCircle size={20} />
                           </button>
 
                           <button
@@ -734,7 +734,11 @@ export const PickerInterface: React.FC<{ onSwitchToManager: () => void; companyL
 
                       <div className="flex justify-between items-center mb-6">
                           <div>
-                              <div className="text-gray-500 dark:text-gray-400 text-sm uppercase font-bold tracking-wider">Passo {currentTask.sequence} de {pickingTasks.length}</div>
+                              <div className="text-gray-500 dark:text-gray-400 text-sm uppercase font-bold tracking-wider flex items-center gap-2">
+                                  Passo {currentTask.sequence} de {pickingTasks.length}
+                                  {currentTask.isPartial && <span className="bg-orange-100 text-orange-600 px-2 py-0.5 rounded text-[10px] border border-orange-200">PARCIAL</span>}
+                                  {currentTask.isSplit && <span className="bg-purple-100 text-purple-600 px-2 py-0.5 rounded text-[10px] border border-purple-200">MULTIPLOS LOCAIS</span>}
+                              </div>
                               <h1 className="text-3xl font-bold text-gray-900 dark:text-white">{currentTask.material}</h1>
                               <div className="text-[#4fc3f7] font-mono text-xl flex items-center gap-2">
                                   <MapPin size={18}/> {currentTask.bin}
@@ -1295,8 +1299,12 @@ export const PickerInterface: React.FC<{ onSwitchToManager: () => void; companyL
                                                 <span className={`font-bold ${isCurrent ? 'text-blue-600 dark:text-white' : 'text-gray-700 dark:text-gray-300'}`}>
                                                     {idx + 1}. {task.material}
                                                 </span>
-                                                {isCompleted && <CheckCircle size={16} className="text-[#00e676]" />}
-                                                {isCurrent && <span className="text-xs bg-[#0277bd] text-white px-2 py-0.5 rounded font-bold">ATUAL</span>}
+                                                <div className="flex items-center gap-1">
+                                                    {task.isPartial && <span className="w-2 h-2 rounded-full bg-orange-500" title="Parcial"></span>}
+                                                    {task.isSplit && <span className="w-2 h-2 rounded-full bg-purple-500" title="Split"></span>}
+                                                    {isCompleted && <CheckCircle size={16} className="text-[#00e676]" />}
+                                                    {isCurrent && <span className="text-xs bg-[#0277bd] text-white px-2 py-0.5 rounded font-bold">ATUAL</span>}
+                                                </div>
                                             </div>
                                             <div className="flex justify-between text-sm text-gray-500 dark:text-gray-400 font-mono">
                                                 <span>{task.bin}</span>

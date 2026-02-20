@@ -33,6 +33,8 @@ export interface PickingTask {
   startNewSection: boolean; // New: Indicates this task starts a new path segment (e.g., new floor)
   isAdHoc?: boolean; // Was this picked freely outside the list?
   requiresConfirmation?: boolean; // Does the supervisor/user need to explicitly accept this extra item?
+  isPartial?: boolean; // Flag if the picked quantity is less than requested
+  isSplit?: boolean; // Flag if this item is being picked from multiple locations
 }
 
 export interface PickingSession {

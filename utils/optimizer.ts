@@ -189,5 +189,30 @@ export const generatePickingList = (
       }
   }
 
+  // POST-PROCESSING: Calculate Split and Partial flags
+  const materialStats = new Map<string, { totalPicked: number, taskCount: number }>();
+  const originalOrders = new Map(orders.map(o => [o.material, o.qty]));
+
+  tasks.forEach(t => {
+      const stats = materialStats.get(t.material) || { totalPicked: 0, taskCount: 0 };
+      stats.totalPicked += t.qtyToPick;
+      stats.taskCount += 1;
+      materialStats.set(t.material, stats);
+  });
+
+  tasks.forEach(t => {
+      const stats = materialStats.get(t.material);
+      const originalQty = originalOrders.get(t.material) || 0;
+      
+      if (stats) {
+          if (stats.taskCount > 1) {
+              t.isSplit = true;
+          }
+          if (stats.totalPicked < originalQty) {
+              t.isPartial = true;
+          }
+      }
+  });
+
   return tasks;
 };
