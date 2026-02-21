@@ -344,6 +344,104 @@ export const updateOrderStatus = async (orderId: string, newStatus: 'OPEN' | 'IN
     }
 };
 
+export const decrementStock = async (pickedItems: PickingTask[]): Promise<{ success: boolean; details: string[] }> => {
+    const database = ensureDb();
+    
+    // FORCE ARRAY: Firebase might return { "0": {...}, "1": {...} } as an object
+    const itemsToProcess = Array.isArray(pickedItems) ? pickedItems : Object.values(pickedItems);
+    
+    console.log("[STOCK-DEBUG] Starting decrement for items:", itemsToProcess);
+
+    if (!itemsToProcess || itemsToProcess.length === 0) {
+        console.warn("[STOCK-DEBUG] Abort: No items or no DB.");
+        return { success: false, details: ["Nenhum item para processar."] };
+    }
+
+    try {
+        const stockRef = database.ref('nexus_stock');
+        const logs: string[] = [];
+        
+        const transactionResult = await stockRef.transaction((currentData: any) => {
+            if (!currentData) {
+                console.warn("[STOCK-DEBUG] Transaction found NO stock data in DB.");
+                return currentData;
+            }
+
+            // Iterate through items picked by the warehouse app
+            itemsToProcess.forEach((picked: PickingTask, idx: number) => {
+                // Ensure we are working with strings, but NO trimming/replacing
+                const pickedSku = String(picked.material || ''); 
+                const pickedBin = String(picked.bin || '');
+                const qtyToDeduct = Number(picked.pickedQty);
+
+                console.log(`[STOCK-DEBUG] Item #${idx} -> SKU: '${pickedSku}', BIN: '${pickedBin}', QTY: ${qtyToDeduct}`);
+
+                if (qtyToDeduct > 0 && pickedSku) {
+                    let matched = false;
+                    // We must iterate the stock DB structure
+                    for (const key in currentData) {
+                        const stockItem = currentData[key];
+                        if (!stockItem) continue;
+
+                        const stockSku = String(stockItem.sku || '');
+                        const stockBatch = String(stockItem.batch || '');
+
+                        // EXACT MATCH REQUIRED
+                        const isSkuMatch = stockSku === pickedSku;
+                        // If picked bin is empty/undefined, we require logic to handle it.
+                        // Here we assume strict bin matching if provided.
+                        const isBinMatch = pickedBin ? (stockBatch === pickedBin) : false;
+
+                        if (isSkuMatch && isBinMatch) {
+                            const currentQty = Number(stockItem.quantity) || 0;
+                            
+                            console.log(`[STOCK-DEBUG] MATCH FOUND at Key '${key}'. DB Stock: ${currentQty}. Deducting: ${qtyToDeduct}`);
+
+                            // Deduct
+                            const deduction = Math.min(currentQty, qtyToDeduct);
+                            
+                            if (deduction > 0) {
+                                stockItem.quantity = currentQty - deduction;
+                                stockItem.lastUpdated = new Date().toISOString();
+                                console.log(`[STOCK-DEBUG] NEW DB Stock: ${stockItem.quantity}`);
+                            } else {
+                                console.warn(`[STOCK-DEBUG] Stock was 0, could not deduct.`);
+                            }
+                            matched = true;
+                            break; // Stop looking for this specific picked line
+                        }
+                    }
+                    if (!matched) {
+                         console.error(`[STOCK-DEBUG] NO MATCH for SKU: '${pickedSku}' + Bin: '${pickedBin}'`);
+                    }
+                } else {
+                    console.warn(`[STOCK-DEBUG] Skipped Item #${idx} due to invalid data.`);
+                }
+            });
+
+            return currentData; // Commit changes
+        });
+
+        if (transactionResult.committed) {
+            console.log("[STOCK-DEBUG] Transaction Committed Successfully.");
+            // Post-process logs for the UI 
+            itemsToProcess.forEach((p: PickingTask) => {
+                if(Number(p.pickedQty) > 0) {
+                    logs.push(`Processado: ${p.material} (${p.pickedQty})`);
+                }
+            });
+            return { success: true, details: logs };
+        } else {
+            console.error("[STOCK-DEBUG] Transaction Failed/Aborted by Firebase.");
+            return { success: false, details: ["Transação abortada pelo banco de dados."] };
+        }
+
+    } catch (e: any) {
+        console.error("[STOCK-DEBUG] Exception in decrementStock:", e);
+        return { success: false, details: [e.message] };
+    }
+};
+
 export const markOrderComplete = async (orderId: string, pickedItems: PickingTask[] = [], excelReportBase64: string = '') => {
     const database = ensureDb();
     const updates: any = {};
@@ -374,8 +472,22 @@ export const markOrderComplete = async (orderId: string, pickedItems: PickingTas
     }
 
     try {
+        // 1. Update Order Status
         await database.ref().update(updates);
         console.log(`Order ${orderId} completed and results uploaded.`);
+
+        // 2. Decrement Stock
+        if (pickedItems.length > 0) {
+            console.log("Starting automatic stock deduction...");
+            const stockResult = await decrementStock(pickedItems);
+            if (stockResult.success) {
+                console.log("Stock deducted successfully.");
+                // Optionally log this to the order changeLog if needed
+            } else {
+                console.warn("Stock deduction failed or partial:", stockResult.details);
+            }
+        }
+
     } catch (e) {
         console.error(`Error completing order ${orderId}:`, e);
         throw e;
