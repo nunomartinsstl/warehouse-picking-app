@@ -43,6 +43,7 @@ export const PickerInterface: React.FC<{ onSwitchToManager: () => void; companyL
   const [showSearchModal, setShowSearchModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<LayoutNode[]>([]);
+  const [isSearchScannerOpen, setIsSearchScannerOpen] = useState(false);
 
   // Custom Confirm Modal State
   const [confirmModal, setConfirmModal] = useState<{
@@ -162,6 +163,58 @@ export const PickerInterface: React.FC<{ onSwitchToManager: () => void; companyL
 
       setSearchResults(results);
   }, [searchQuery, stock, layoutCoords]);
+
+  // Search Scanner Logic
+  useEffect(() => {
+    if (isSearchScannerOpen && showSearchModal) {
+        const initSearchScanner = async () => {
+            try {
+                await new Promise(r => setTimeout(r, 100));
+                
+                if (html5QrCodeRef.current) {
+                    await html5QrCodeRef.current.stop().catch(() => {});
+                    html5QrCodeRef.current.clear();
+                }
+
+                const html5QrCode = new Html5Qrcode("search-qr-reader");
+                html5QrCodeRef.current = html5QrCode;
+
+                await html5QrCode.start(
+                    { facingMode: "environment" },
+                    { fps: 10, qrbox: { width: 250, height: 250 } },
+                    (decodedText) => {
+                        const scan = decodedText.trim().toUpperCase();
+                        setSearchQuery(scan);
+                        setIsSearchScannerOpen(false);
+                        if (html5QrCodeRef.current) {
+                            html5QrCodeRef.current.stop().catch(console.error).finally(() => {
+                                html5QrCodeRef.current?.clear();
+                                html5QrCodeRef.current = null;
+                            });
+                        }
+                    },
+                    (errorMessage) => {
+                        // ignore
+                    }
+                );
+            } catch (err) {
+                console.error("Error starting search scanner", err);
+                setIsSearchScannerOpen(false);
+            }
+        };
+
+        initSearchScanner();
+
+        return () => {
+            if (html5QrCodeRef.current) {
+                html5QrCodeRef.current.stop().catch(console.error).finally(() => {
+                    html5QrCodeRef.current?.clear();
+                    html5QrCodeRef.current = null;
+                });
+            }
+        };
+    }
+  }, [isSearchScannerOpen, showSearchModal]);
 
   // QR Code Scanner Effect
   useEffect(() => {
@@ -958,21 +1011,35 @@ export const PickerInterface: React.FC<{ onSwitchToManager: () => void; companyL
                 <div className="w-full max-w-md bg-white dark:bg-[#141923] border border-gray-200 dark:border-[#37474f] rounded-2xl flex flex-col shadow-2xl h-[70vh] transition-colors">
                     <div className="p-4 border-b border-gray-200 dark:border-[#37474f] flex justify-between items-center bg-gray-50 dark:bg-[#1e2736] rounded-t-2xl">
                         <h2 className="font-bold flex items-center gap-2 text-gray-900 dark:text-white"><Search className="text-[#4fc3f7]" /> Pesquisar</h2>
-                        <button onClick={() => { setShowSearchModal(false); setSearchQuery(''); setSearchResults([]); }} className="text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white">
+                        <button onClick={() => { setShowSearchModal(false); setSearchQuery(''); setSearchResults([]); setIsSearchScannerOpen(false); }} className="text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white">
                             <X size={24} />
                         </button>
                     </div>
                     
-                    <div className="p-4 border-b border-gray-200 dark:border-[#37474f]">
+                    <div className="p-4 border-b border-gray-200 dark:border-[#37474f] flex gap-2">
                         <input 
                             type="text" 
                             placeholder="Material, Descrição ou Lote..."
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
-                            className="w-full bg-gray-100 dark:bg-[#0f131a] border border-gray-300 dark:border-[#37474f] p-3 rounded-lg text-gray-900 dark:text-white focus:border-[#4fc3f7] focus:outline-none transition-colors"
+                            className="flex-1 bg-gray-100 dark:bg-[#0f131a] border border-gray-300 dark:border-[#37474f] p-3 rounded-lg text-gray-900 dark:text-white focus:border-[#4fc3f7] focus:outline-none transition-colors"
                             autoFocus
                         />
+                        <button 
+                            onClick={() => setIsSearchScannerOpen(!isSearchScannerOpen)}
+                            className={`p-3 rounded-lg border transition-colors ${isSearchScannerOpen ? 'bg-red-100 text-red-600 border-red-200' : 'bg-gray-100 dark:bg-[#0f131a] text-gray-700 dark:text-gray-300 border-gray-300 dark:border-[#37474f]'}`}
+                            title="Scan QR Code"
+                        >
+                            <QrCode size={20} />
+                        </button>
                     </div>
+
+                    {isSearchScannerOpen && (
+                        <div className="p-4 bg-black">
+                            <div id="search-qr-reader" className="w-full overflow-hidden rounded-lg"></div>
+                            <p className="text-white text-center text-xs mt-2">Aponte para um código de barras ou QR Code</p>
+                        </div>
+                    )}
 
                     <div className="flex-1 overflow-y-auto p-2">
                         {searchResults.length === 0 && searchQuery && (
