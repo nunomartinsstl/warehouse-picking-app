@@ -44,6 +44,7 @@ export const PickerInterface: React.FC<{ onSwitchToManager: () => void; companyL
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<LayoutNode[]>([]);
   const [isSearchScannerOpen, setIsSearchScannerOpen] = useState(false);
+  const [isExactSearch, setIsExactSearch] = useState(false);
 
   // Custom Confirm Modal State
   const [confirmModal, setConfirmModal] = useState<{
@@ -144,7 +145,11 @@ export const PickerInterface: React.FC<{ onSwitchToManager: () => void; companyL
 
       // 1. Search Stock (Material or Description)
       stock.forEach(item => {
-          if ((item.material.toLowerCase().includes(q) || item.description.toLowerCase().includes(q)) && item.bin) {
+          const isMatch = isExactSearch 
+              ? (item.material.toLowerCase() === q || item.bin.toLowerCase() === q)
+              : (item.material.toLowerCase().includes(q) || item.description.toLowerCase().includes(q));
+
+          if (isMatch && item.bin) {
               const node = layoutCoords.get(item.bin);
               if (node && !seenBins.has(item.bin)) {
                   results.push(node);
@@ -155,14 +160,18 @@ export const PickerInterface: React.FC<{ onSwitchToManager: () => void; companyL
 
       // 2. Search Bin Codes directly
       layoutCoords.forEach((node, bin) => {
-          if (bin.toLowerCase().includes(q) && !seenBins.has(bin)) {
+          const isMatch = isExactSearch 
+              ? bin.toLowerCase() === q 
+              : bin.toLowerCase().includes(q);
+
+          if (isMatch && !seenBins.has(bin)) {
               results.push(node);
               seenBins.add(bin);
           }
       });
 
       setSearchResults(results);
-  }, [searchQuery, stock, layoutCoords]);
+  }, [searchQuery, stock, layoutCoords, isExactSearch]);
 
   // Search Scanner Logic
   useEffect(() => {
@@ -185,6 +194,7 @@ export const PickerInterface: React.FC<{ onSwitchToManager: () => void; companyL
                     (decodedText) => {
                         const scan = decodedText.trim().toUpperCase();
                         setSearchQuery(scan);
+                        setIsExactSearch(true);
                         setIsSearchScannerOpen(false);
                         if (html5QrCodeRef.current) {
                             html5QrCodeRef.current.stop().catch(console.error).finally(() => {
@@ -1011,7 +1021,7 @@ export const PickerInterface: React.FC<{ onSwitchToManager: () => void; companyL
                 <div className="w-full max-w-md bg-white dark:bg-[#141923] border border-gray-200 dark:border-[#37474f] rounded-2xl flex flex-col shadow-2xl h-[70vh] transition-colors">
                     <div className="p-4 border-b border-gray-200 dark:border-[#37474f] flex justify-between items-center bg-gray-50 dark:bg-[#1e2736] rounded-t-2xl">
                         <h2 className="font-bold flex items-center gap-2 text-gray-900 dark:text-white"><Search className="text-[#4fc3f7]" /> Pesquisar</h2>
-                        <button onClick={() => { setShowSearchModal(false); setSearchQuery(''); setSearchResults([]); setIsSearchScannerOpen(false); }} className="text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white">
+                        <button onClick={() => { setShowSearchModal(false); setSearchQuery(''); setSearchResults([]); setIsSearchScannerOpen(false); setIsExactSearch(false); }} className="text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white">
                             <X size={24} />
                         </button>
                     </div>
@@ -1021,7 +1031,7 @@ export const PickerInterface: React.FC<{ onSwitchToManager: () => void; companyL
                             type="text" 
                             placeholder="Material, Descrição ou Lote..."
                             value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
+                            onChange={(e) => { setSearchQuery(e.target.value); setIsExactSearch(false); }}
                             className="flex-1 bg-gray-100 dark:bg-[#0f131a] border border-gray-300 dark:border-[#37474f] p-3 rounded-lg text-gray-900 dark:text-white focus:border-[#4fc3f7] focus:outline-none transition-colors"
                             autoFocus
                         />
