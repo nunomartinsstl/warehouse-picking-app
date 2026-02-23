@@ -803,6 +803,14 @@ export const PickerInterface: React.FC<{ onSwitchToManager: () => void; companyL
                                   {currentTask.isSplit && <span className="bg-purple-100 text-purple-600 px-2 py-0.5 rounded text-[10px] border border-purple-200">MULTIPLOS LOCAIS</span>}
                               </div>
                               <h1 className="text-3xl font-bold text-gray-900 dark:text-white">{currentTask.material}</h1>
+                              {(() => {
+                                  const stockInfo = stock.find(s => s.material === currentTask.material);
+                                  return stockInfo?.description ? (
+                                      <div className="text-sm text-gray-500 dark:text-gray-400 font-medium mt-1 mb-1 max-w-md truncate">
+                                          {stockInfo.description}
+                                      </div>
+                                  ) : null;
+                              })()}
                               <div className="text-[#4fc3f7] font-mono text-xl flex items-center gap-2">
                                   <MapPin size={18}/> {currentTask.bin}
                               </div>
