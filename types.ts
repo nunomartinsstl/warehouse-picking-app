@@ -35,6 +35,7 @@ export interface PickingTask {
   requiresConfirmation?: boolean; // Does the supervisor/user need to explicitly accept this extra item?
   isPartial?: boolean; // Flag if the picked quantity is less than requested
   isSplit?: boolean; // Flag if this item is being picked from multiple locations
+  skipped?: boolean; // Flag if this task was skipped due to stock error
 }
 
 export interface PickingSession {

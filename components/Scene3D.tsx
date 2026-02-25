@@ -1,5 +1,5 @@
 import React, { useMemo, useEffect, useRef } from 'react';
-import { Canvas, useThree } from '@react-three/fiber';
+import { Canvas, useThree, useFrame } from '@react-three/fiber';
 import { OrbitControls, Text, Line, Billboard } from '@react-three/drei';
 import * as THREE from 'three';
 import { LayoutNode, PickingTask, WarehouseLayout, Unit } from '../types';
@@ -464,7 +464,11 @@ const WarehouseContent: React.FC<SceneProps> = ({ visualLayout, layoutCoords, ta
       return map;
   }, [visualLayout]);
 
-  // Handle Camera Movement
+  // Target state for smooth animation
+  const targetRef = useRef(new THREE.Vector3(60, 0, 0));
+  const posRef = useRef(new THREE.Vector3(60, 100, 100));
+
+  // Update targets based on props
   useEffect(() => {
     if (!visualLayout) return;
 
@@ -510,18 +514,30 @@ const WarehouseContent: React.FC<SceneProps> = ({ visualLayout, layoutCoords, ta
         pos.set(60, 200, 200);
     }
 
-    // Final safety check to prevent WebGL crash from NaN
     if (isFinite(target.x) && isFinite(target.y) && isFinite(target.z) &&
         isFinite(pos.x) && isFinite(pos.y) && isFinite(pos.z)) {
-        if (controlsRef.current) {
-            controlsRef.current.target.copy(target);
-            controlsRef.current.update();
-        }
-        camera.position.copy(pos);
-        camera.lookAt(target);
+        targetRef.current.copy(target);
+        posRef.current.copy(pos);
     }
 
-  }, [visibleFloor, visualLayout, camera, isZoomedIn, focusedTaskIndex]);
+  }, [visibleFloor, visualLayout, isZoomedIn, focusedTaskIndex, tasks]);
+
+  // Animation Loop
+  useFrame((state, delta) => {
+      if (!controlsRef.current) return;
+
+      const step = Math.min(1, delta * 2.5); // Adjust speed here
+
+      // Smoothly interpolate controls target
+      controlsRef.current.target.lerp(targetRef.current, step);
+      controlsRef.current.update();
+
+      // Smoothly interpolate camera position
+      state.camera.position.lerp(posRef.current, step);
+      
+      // Ensure camera looks at the (interpolated) target
+      state.camera.lookAt(controlsRef.current.target);
+  });
 
   const floorMeshes = useMemo(() => {
     if (!visualLayout) return [];

@@ -62,6 +62,9 @@ export const PickerInterface: React.FC<{ onSwitchToManager: () => void; companyL
   const [qtyMessageType, setQtyMessageType] = useState<'info' | 'warning' | 'error' | 'success'>('info');
   const [qtyMax, setQtyMax] = useState<number>(9999); // Track max allowable
 
+  // Stock Error Modal State
+  const [showStockErrorModal, setShowStockErrorModal] = useState(false);
+
   const html5QrCodeRef = useRef<Html5Qrcode | null>(null);
   const tempTaskRef = useRef<PickingTask | null>(null);
 
@@ -697,7 +700,7 @@ export const PickerInterface: React.FC<{ onSwitchToManager: () => void; companyL
         </div>
 
         <div className="absolute top-0 left-0 right-0 p-4 flex justify-between items-start z-10 pointer-events-none">
-             <div className="pointer-events-auto flex flex-col gap-3">
+             <div className="pointer-events-auto flex flex-col gap-3 relative z-20">
                  {companyLogo && (
                      <div className="bg-white/90 p-2 rounded-lg shadow-lg border border-gray-200 backdrop-blur-sm self-start">
                         <img src={companyLogo} alt="Logo" className="h-8 w-auto object-contain" />
@@ -829,12 +832,22 @@ export const PickerInterface: React.FC<{ onSwitchToManager: () => void; companyL
                               <QrCode /> Scan Posição Recomendada
                           </button>
                           
-                          <button 
-                             onClick={() => { setScanMode('free'); setIsScannerOpen(true); }}
-                             className="w-full bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 border border-gray-300 dark:border-gray-600 py-3 rounded-xl font-bold flex justify-center items-center gap-2 transition-colors text-gray-700 dark:text-gray-300"
-                          >
-                              <Box size={20} /> Scan Livre (Outra Posição)
-                          </button>
+                          <div className="flex gap-3">
+                              <button 
+                                  onClick={() => { setScanMode('free'); setIsScannerOpen(true); }}
+                                  className="flex-1 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 border border-gray-300 dark:border-gray-600 py-3 rounded-xl font-bold flex justify-center items-center gap-2 transition-colors text-gray-700 dark:text-gray-300 text-sm"
+                              >
+                                  <Box size={18} /> Outra Posição
+                              </button>
+                              
+                              <button 
+                                  onClick={() => setShowStockErrorModal(true)}
+                                  className="flex-1 bg-red-100 dark:bg-red-900/20 hover:bg-red-200 dark:hover:bg-red-900/30 text-red-600 dark:text-red-400 py-3 rounded-xl font-bold flex justify-center items-center gap-2 border border-red-200 dark:border-red-900/50 transition-colors text-sm"
+                              >
+                                  <AlertTriangle size={18} />
+                                  Stock Errado
+                              </button>
+                          </div>
                       </div>
                  </div>
             </div>
@@ -1206,6 +1219,74 @@ export const PickerInterface: React.FC<{ onSwitchToManager: () => void; companyL
             </div>
         )}
 
+        {showStockErrorModal && (
+            <div className="absolute inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+                <div className="bg-white dark:bg-[#141923] border border-red-200 dark:border-red-900/50 rounded-2xl w-full max-w-sm p-6 shadow-2xl transition-colors">
+                    <h3 className="text-xl font-bold mb-4 flex items-center gap-2 text-red-600 dark:text-red-400">
+                        <AlertTriangle /> Stock Errado
+                    </h3>
+                    <p className="text-gray-600 dark:text-gray-300 mb-6 text-sm">
+                        O que pretende fazer com esta posição?
+                    </p>
+                    
+                    <div className="flex flex-col gap-3">
+                        <button 
+                            onClick={() => {
+                                setShowStockErrorModal(false);
+                                setScanMode('free'); // Allow scanning any bin
+                                setIsScannerOpen(true);
+                            }}
+                            className="w-full bg-[#0277bd] hover:bg-[#0288d1] text-white py-3 rounded-lg font-bold flex justify-center items-center gap-2 transition-colors"
+                        >
+                            <QrCode size={18} /> Scan Outra Posição
+                        </button>
+                        
+                        <button 
+                            onClick={() => {
+                                if (focusedTaskIndex !== null) {
+                                    // Move current task to skipped/ignored list
+                                    const taskToSkip = pickingTasks[focusedTaskIndex];
+                                    const newSkipped = [...skippedItems, { 
+                                        material: taskToSkip.material, 
+                                        qty: taskToSkip.qtyToPick
+                                    }];
+                                    
+                                    // Remove from picking tasks
+                                    const newTasks = pickingTasks.filter((_, idx) => idx !== focusedTaskIndex);
+                                    
+                                    setSkippedItems(newSkipped);
+                                    setPickingTasks(newTasks);
+                                    setShowStockErrorModal(false);
+                                    
+                                    // Move to next task or finish
+                                    if (focusedTaskIndex < newTasks.length) {
+                                        setFocusedTaskIndex(focusedTaskIndex); // Index stays same as array shifts
+                                        setVisibleFloor(newTasks[focusedTaskIndex].floorId);
+                                    } else if (newTasks.length > 0) {
+                                        setFocusedTaskIndex(0);
+                                        setVisibleFloor(newTasks[0].floorId);
+                                    } else {
+                                        setFocusedTaskIndex(null);
+                                        setShowFinishModal(true);
+                                    }
+                                }
+                            }}
+                            className="w-full bg-red-100 dark:bg-red-900/20 hover:bg-red-200 dark:hover:bg-red-900/30 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-900/50 py-3 rounded-lg font-bold flex justify-center items-center gap-2 transition-colors"
+                        >
+                            <EyeOff size={18} /> Ignorar Posição
+                        </button>
+
+                        <button 
+                            onClick={() => setShowStockErrorModal(false)}
+                            className="w-full bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 py-3 rounded-lg font-bold hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors mt-2"
+                        >
+                            Cancelar
+                        </button>
+                    </div>
+                </div>
+            </div>
+        )}
+
         {showQtyModal && (
             <div className="absolute inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
                  <div className="bg-white dark:bg-[#141923] border border-gray-200 dark:border-[#37474f] rounded-2xl w-full max-w-sm p-6 shadow-2xl transition-colors">
@@ -1361,6 +1442,14 @@ export const PickerInterface: React.FC<{ onSwitchToManager: () => void; companyL
                                                 <tr key={idx} className="hover:bg-gray-100 dark:hover:bg-[#263238] transition-colors">
                                                     <td className="px-4 py-3 font-mono font-bold text-gray-900 dark:text-white break-all">
                                                         {orderItem.material}
+                                                        {(() => {
+                                                            const stockInfo = stock.find(s => s.material === orderItem.material);
+                                                            return stockInfo?.description && (
+                                                                <div className="text-xs text-gray-500 dark:text-gray-400 font-sans font-normal truncate max-w-[150px]">
+                                                                    {stockInfo.description}
+                                                                </div>
+                                                            );
+                                                        })()}
                                                     </td>
                                                     <td className="px-4 py-3 text-center text-gray-600 dark:text-gray-300">
                                                         {total}
@@ -1399,6 +1488,14 @@ export const PickerInterface: React.FC<{ onSwitchToManager: () => void; companyL
                                             <div className="flex justify-between items-center mb-1">
                                                 <span className={`font-bold ${isCurrent ? 'text-blue-600 dark:text-white' : 'text-gray-700 dark:text-gray-300'}`}>
                                                     {idx + 1}. {task.material}
+                                                    {(() => {
+                                                        const stockInfo = stock.find(s => s.material === task.material);
+                                                        return stockInfo?.description && (
+                                                            <div className="text-xs text-gray-500 dark:text-gray-400 font-normal truncate block">
+                                                                {stockInfo.description}
+                                                            </div>
+                                                        );
+                                                    })()}
                                                 </span>
                                                 <div className="flex items-center gap-1">
                                                     {task.isPartial && <span className="w-2 h-2 rounded-full bg-orange-500" title="Parcial"></span>}
@@ -1422,7 +1519,17 @@ export const PickerInterface: React.FC<{ onSwitchToManager: () => void; companyL
                                         </h3>
                                         {skippedItems.map((item, idx) => (
                                             <div key={`skipped-${idx}`} className="p-3 bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-900/30 rounded-lg mb-2 opacity-75">
-                                                <div className="font-bold text-gray-800 dark:text-gray-300">{item.material}</div>
+                                                <div className="font-bold text-gray-800 dark:text-gray-300">
+                                                    {item.material}
+                                                    {(() => {
+                                                        const stockInfo = stock.find(s => s.material === item.material);
+                                                        return stockInfo?.description && (
+                                                            <div className="text-xs text-gray-500 dark:text-gray-400 font-normal truncate">
+                                                                {stockInfo.description}
+                                                            </div>
+                                                        );
+                                                    })()}
+                                                </div>
                                                 <div className="text-xs text-gray-600 dark:text-gray-500">Qtd Requerida: {item.qty}</div>
                                             </div>
                                         ))}
