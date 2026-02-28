@@ -201,6 +201,66 @@ export const submitReceipt = async (receipt: ReceiptData) => {
     console.log("Receipt processed and stock updated.");
 };
 
+// --- TRANSFER FUNCTIONS ---
+
+export const submitTransfer = async (data: { originBin: string, destBin: string, material: string, qty: number, userId: string }) => {
+    const database = ensureDb();
+    
+    // 1. Log the Transfer
+    const transferRef = database.ref('nexus_transfers').push();
+    await transferRef.set({
+        ...data,
+        timestamp: new Date().toISOString(),
+        id: transferRef.key
+    });
+
+    // 2. Update Stock
+    const currentStock = await fetchStockFromCloud();
+    const updatedStock = [...currentStock];
+
+    // Find Source
+    const sourceIndex = updatedStock.findIndex(s => s.material === data.material && s.bin === data.originBin);
+    if (sourceIndex === -1) {
+        throw new Error("Origem não encontrada ou sem stock.");
+    }
+
+    if (updatedStock[sourceIndex].qtyAvailable < data.qty) {
+        throw new Error("Quantidade insuficiente na origem.");
+    }
+
+    // Deduct from Source
+    updatedStock[sourceIndex].qtyAvailable -= data.qty;
+    
+    // If source becomes 0, we might want to keep it or remove it. 
+    // Usually we keep it with 0 or remove it. Let's keep it for now or remove if 0?
+    // Let's remove if 0 to keep list clean, or keep it. 
+    // The fetchStockFromCloud filters (i => i.material), so 0 qty items might be visible.
+    // Let's leave it as is.
+
+    // Find/Create Destination
+    const destIndex = updatedStock.findIndex(s => s.material === data.material && s.bin === data.destBin);
+    
+    if (destIndex > -1) {
+        updatedStock[destIndex].qtyAvailable += data.qty;
+    } else {
+        updatedStock.push({
+            material: data.material,
+            description: updatedStock[sourceIndex].description, // Copy description
+            bin: data.destBin,
+            qtyAvailable: data.qty
+        });
+    }
+
+    // Remove items with 0 qty to clean up? Or keep them?
+    // If we remove them, we might lose the record that the bin *can* hold that item.
+    // But for a clean stock list, removing 0s is often better.
+    // Let's filter out 0s.
+    const finalStock = updatedStock.filter(s => s.qtyAvailable > 0);
+
+    await saveStockToCloud(finalStock);
+    console.log("Transfer processed successfully.");
+};
+
 // --- ORDER FUNCTIONS ---
 
 export const fetchOpenOrdersFromCloud = async (): Promise<CloudOrder[]> => {
@@ -442,12 +502,13 @@ export const decrementStock = async (pickedItems: PickingTask[]): Promise<{ succ
     }
 };
 
-export const markOrderComplete = async (orderId: string, pickedItems: PickingTask[] = [], excelReportBase64: string = '') => {
+export const markOrderComplete = async (orderId: string, pickedItems: PickingTask[] = [], excelReportBase64: string = '', pickerInfo: string = 'unknown') => {
     const database = ensureDb();
     const updates: any = {};
     
     updates[`/nexus_orders/${orderId}/status`] = 'COMPLETED';
     updates[`/nexus_orders/${orderId}/completedAt`] = new Date().toISOString();
+    updates[`/nexus_orders/${orderId}/pickedBy`] = pickerInfo;
     
     updates[`/nexus_orders/${orderId}/pickedItems`] = pickedItems;
     

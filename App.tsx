@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { PickerInterface } from './components/PickerInterface';
 import { ManagerPlatform } from './components/ManagerPlatform';
 import { ReceiverInterface } from './components/ReceiverInterface';
-import { Lock, ArrowRight, ArrowLeft, Mail, LogIn, Loader2, LogOut, User as UserIcon, Eye, EyeOff, Package, Archive, Box } from 'lucide-react';
+import { Lock, ArrowRight, ArrowLeft, Mail, LogIn, Loader2, LogOut, User as UserIcon, Eye, EyeOff, Package, Archive, Box, ArrowLeftRight } from 'lucide-react';
 import { authenticateUser, auth, fetchUserProfile, signOutUser } from './utils/firebase';
 import { User as UserType } from './types';
 
@@ -22,8 +22,8 @@ const App: React.FC = () => {
   // View State
   const [view, setView] = useState<'picker' | 'manager'>('picker');
   
-  // New: Application Mode (Picking vs Receiving)
-  const [appMode, setAppMode] = useState<'picking' | 'receiving'>('picking');
+  // New: Application Mode (Picking vs Receiving vs Transfers)
+  const [appMode, setAppMode] = useState<'picking' | 'receiving' | 'transfers'>('picking');
   
   // Logo State
   const [logoError, setLogoError] = useState(false);
@@ -117,7 +117,7 @@ const App: React.FC = () => {
       setView('picker');
   };
 
-  const selectMode = (mode: 'picking' | 'receiving') => {
+  const selectMode = (mode: 'picking' | 'receiving' | 'transfers') => {
       setAppMode(mode);
       setAuthStage('app');
   };
@@ -276,37 +276,47 @@ const App: React.FC = () => {
   // --- NEW: MODE SELECTION SCREEN ---
   if (authStage === 'mode_select') {
       return (
-          <div className="w-full h-screen bg-gray-900 text-white flex flex-col items-center justify-center p-6 font-sans">
-              <div className="mb-12 text-center">
-                  <h2 className="text-3xl font-bold mb-2">Bem-vindo</h2>
-                  <p className="text-gray-400">Selecione o modo de operação</p>
+          <div className="w-full min-h-screen bg-gray-900 text-white flex flex-col items-center justify-center p-4 font-sans overflow-y-auto">
+              <div className="mb-6 md:mb-12 text-center mt-4 md:mt-0">
+                  <h2 className="text-2xl md:text-3xl font-bold mb-1 md:mb-2">Bem-vindo</h2>
+                  <p className="text-gray-400 text-sm md:text-base">Selecione o modo de operação</p>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 w-full max-w-2xl">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 md:gap-6 w-full max-w-4xl">
                   <button 
                     onClick={() => selectMode('picking')}
-                    className="bg-gray-800 hover:bg-[#4fc3f7]/10 border-2 border-gray-700 hover:border-[#4fc3f7] p-8 rounded-2xl flex flex-col items-center gap-4 transition-all group"
+                    className="bg-gray-800 hover:bg-[#4fc3f7]/10 border-2 border-gray-700 hover:border-[#4fc3f7] p-4 md:p-8 rounded-2xl flex flex-row sm:flex-col items-center justify-start sm:justify-center gap-4 transition-all group"
                   >
-                      <div className="bg-gray-700 group-hover:bg-[#4fc3f7] p-6 rounded-full transition-colors">
-                          <Package size={40} className="text-white" />
+                      <div className="bg-gray-700 group-hover:bg-[#4fc3f7] p-3 md:p-6 rounded-full transition-colors shrink-0">
+                          <Package className="w-6 h-6 md:w-10 md:h-10 text-white" />
                       </div>
-                      <h3 className="text-2xl font-bold">Picking</h3>
+                      <h3 className="text-lg md:text-2xl font-bold">Picking</h3>
                   </button>
 
                   <button 
                     onClick={() => selectMode('receiving')}
-                    className="bg-gray-800 hover:bg-[#00e676]/10 border-2 border-gray-700 hover:border-[#00e676] p-8 rounded-2xl flex flex-col items-center gap-4 transition-all group"
+                    className="bg-gray-800 hover:bg-[#00e676]/10 border-2 border-gray-700 hover:border-[#00e676] p-4 md:p-8 rounded-2xl flex flex-row sm:flex-col items-center justify-start sm:justify-center gap-4 transition-all group"
                   >
-                      <div className="bg-gray-700 group-hover:bg-[#00e676] p-6 rounded-full transition-colors">
-                          <Archive size={40} className="text-white" />
+                      <div className="bg-gray-700 group-hover:bg-[#00e676] p-3 md:p-6 rounded-full transition-colors shrink-0">
+                          <Archive className="w-6 h-6 md:w-10 md:h-10 text-white" />
                       </div>
-                      <h3 className="text-2xl font-bold">Entrada</h3>
+                      <h3 className="text-lg md:text-2xl font-bold">Entradas</h3>
+                  </button>
+
+                  <button 
+                    onClick={() => selectMode('transfers')}
+                    className="bg-gray-800 hover:bg-purple-500/10 border-2 border-gray-700 hover:border-purple-500 p-4 md:p-8 rounded-2xl flex flex-row sm:flex-col items-center justify-start sm:justify-center gap-4 transition-all group"
+                  >
+                      <div className="bg-gray-700 group-hover:bg-purple-500 p-3 md:p-6 rounded-full transition-colors shrink-0">
+                          <ArrowLeftRight className="w-6 h-6 md:w-10 md:h-10 text-white" />
+                      </div>
+                      <h3 className="text-lg md:text-2xl font-bold">Transferências</h3>
                   </button>
               </div>
 
               <button 
                 onClick={handleLogout}
-                className="mt-12 text-gray-500 hover:text-white flex items-center gap-2 text-sm"
+                className="mt-6 md:mt-12 mb-4 md:mb-0 text-gray-500 hover:text-white flex items-center gap-2 text-sm"
               >
                   <LogOut size={16} /> Terminar Sessão
               </button>
@@ -337,7 +347,9 @@ const App: React.FC = () => {
                 className="bg-gray-800 hover:bg-gray-700 border border-gray-600 p-2 rounded-full shadow-lg backdrop-blur-sm transition-all text-gray-300"
                 title="Mudar Modo"
               >
-                  {appMode === 'picking' ? <Package size={20} /> : <Archive size={20} />}
+                  {appMode === 'picking' ? <Package size={20} /> : 
+                   appMode === 'receiving' ? <Archive size={20} /> : 
+                   <ArrowLeftRight size={20} />}
               </button>
 
               <button 
@@ -363,6 +375,9 @@ const App: React.FC = () => {
              <PickerInterface 
                 onSwitchToManager={() => setView('manager')} 
                 companyLogo={selectedCompany?.id === '1' ? logoAvac : logoHotelaria}
+                initialMode={appMode === 'transfers' ? 'transfers' : 'picking'}
+                onExit={() => setAuthStage('mode_select')}
+                user={currentUser}
              />
           )}
       </div>

@@ -1,14 +1,22 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Scene3D } from './Scene3D';
-import { LayoutNode, OrderItem, PickingTask, StockItem, CloudOrder, WarehouseLayout } from '../types';
+import { LayoutNode, OrderItem, PickingTask, StockItem, CloudOrder, WarehouseLayout, User } from '../types';
 import { generatePickingList, reorderRemainingTasks, FLOORS } from '../utils/optimizer';
-import { fetchStockFromCloud, fetchOpenOrdersFromCloud, markOrderComplete, updateOrderStatus } from '../utils/firebase';
+import { fetchStockFromCloud, fetchOpenOrdersFromCloud, markOrderComplete, updateOrderStatus, submitTransfer, auth } from '../utils/firebase';
 import { DEFAULT_LAYOUT_COORDS, DEFAULT_VISUAL_LAYOUT } from '../utils/defaults';
-import { Home, CheckCircle, Navigation, Package, ArrowRight, ArrowLeft, Clock, QrCode, List, X, RefreshCw, History, AlertTriangle, Box, MapPin, Play, Trash2, Upload, EyeOff, Save, AlignJustify, Layers, Loader2, Zap, ZoomIn, ZoomOut, Calendar, Search } from 'lucide-react';
+import { ScrollingPicker } from './ScrollingPicker';
+import { Home, CheckCircle, Navigation, Package, ArrowRight, ArrowLeft, Clock, QrCode, List, X, RefreshCw, History, AlertTriangle, Box, MapPin, Play, Trash2, Upload, EyeOff, Save, AlignJustify, Layers, Loader2, Zap, ZoomIn, ZoomOut, Calendar, Search, ArrowLeftRight, Minimize2, Maximize2 } from 'lucide-react';
 import { Html5Qrcode } from 'html5-qrcode';
+import { generateLayoutCoords } from '../utils/layoutGenerator';
 
-export const PickerInterface: React.FC<{ onSwitchToManager: () => void; companyLogo?: string }> = ({ onSwitchToManager, companyLogo }) => {
+export const PickerInterface: React.FC<{ 
+    onSwitchToManager: () => void; 
+    companyLogo?: string;
+    initialMode?: 'picking' | 'transfers';
+    onExit?: () => void;
+    user?: User | null;
+}> = ({ onSwitchToManager, companyLogo, initialMode = 'picking', onExit, user }) => {
   // State
   const [layoutCoords, setLayoutCoords] = useState<Map<string, LayoutNode>>(new Map());
   const [visualLayout, setVisualLayout] = useState<WarehouseLayout | null>(null);
@@ -23,7 +31,7 @@ export const PickerInterface: React.FC<{ onSwitchToManager: () => void; companyL
   const [focusedTaskIndex, setFocusedTaskIndex] = useState<number | null>(null);
   const [visibleFloor, setVisibleFloor] = useState<number | null>(null);
   const [currentSessionId, setCurrentSessionId] = useState<string>('');
-  const [isSetupOpen, setIsSetupOpen] = useState<boolean>(true);
+  const [isSetupOpen, setIsSetupOpen] = useState<boolean>(initialMode === 'picking');
   const [stockLoadDate, setStockLoadDate] = useState<string>('');
 
   // New UI States
@@ -65,14 +73,27 @@ export const PickerInterface: React.FC<{ onSwitchToManager: () => void; companyL
   // Stock Error Modal State
   const [showStockErrorModal, setShowStockErrorModal] = useState(false);
 
+  // --- TRANSFER MODE STATE ---
+  const [isTransferMode, setIsTransferMode] = useState(initialMode === 'transfers');
+  const [transferStep, setTransferStep] = useState<'origin' | 'material' | 'qty' | 'dest' | 'confirm'>('origin');
+  const [transferData, setTransferData] = useState<{
+      originBin: string;
+      material: string;
+      qty: number;
+      destBin: string;
+  }>({ originBin: '', material: '', qty: 0, destBin: '' });
+  const [transferScannerOpen, setTransferScannerOpen] = useState(false);
+  const [tempBinCode, setTempBinCode] = useState(''); // For manual correction
+  const [highlightedBin, setHighlightedBin] = useState<string | null>(null); // For 3D view highlighting
+
   const html5QrCodeRef = useRef<Html5Qrcode | null>(null);
   const tempTaskRef = useRef<PickingTask | null>(null);
 
   // Initialize Defaults & Restore Session
   useEffect(() => {
     // Load Defaults
-    const map = new Map<string, LayoutNode>();
-    DEFAULT_LAYOUT_COORDS.forEach(n => map.set(n.bin, n));
+    // Use generated layout coords instead of hardcoded ones to ensure consistency with Scene3D
+    const map = generateLayoutCoords(DEFAULT_VISUAL_LAYOUT);
     setLayoutCoords(map);
     setVisualLayout(DEFAULT_VISUAL_LAYOUT);
 
@@ -231,7 +252,7 @@ export const PickerInterface: React.FC<{ onSwitchToManager: () => void; companyL
 
   // QR Code Scanner Effect
   useEffect(() => {
-    if (isScannerOpen) {
+    if (isScannerOpen || transferScannerOpen) {
         // Init scanner
         const initScanner = async () => {
             try {
@@ -243,13 +264,15 @@ export const PickerInterface: React.FC<{ onSwitchToManager: () => void; companyL
                     html5QrCodeRef.current.clear();
                 }
 
-                const html5QrCode = new Html5Qrcode("qr-reader");
+                // Determine element ID based on mode
+                const elementId = transferScannerOpen ? "transfer-qr-reader" : "qr-reader";
+                const html5QrCode = new Html5Qrcode(elementId);
                 html5QrCodeRef.current = html5QrCode;
 
                 await html5QrCode.start(
                     { facingMode: "environment" },
                     { fps: 10, qrbox: { width: 250, height: 250 } },
-                    onScanSuccess,
+                    transferScannerOpen ? onTransferScan : onScanSuccess,
                     (errorMessage) => {
                         // Ignore standard scanning errors
                     }
@@ -258,6 +281,7 @@ export const PickerInterface: React.FC<{ onSwitchToManager: () => void; companyL
                 console.error("Error starting scanner", err);
                 alert("Erro ao iniciar câmara. Verifique as permissões.");
                 setIsScannerOpen(false);
+                setTransferScannerOpen(false);
             }
         };
 
@@ -272,7 +296,22 @@ export const PickerInterface: React.FC<{ onSwitchToManager: () => void; companyL
             }
         };
     }
-  }, [isScannerOpen]);
+  }, [isScannerOpen, transferScannerOpen]);
+
+  // Transfer Scan Handler
+  const onTransferScan = (decodedText: string) => {
+      const scan = decodedText.trim().toUpperCase();
+      setTempBinCode(scan);
+      setHighlightedBin(scan);
+      setTransferScannerOpen(false);
+      
+      if (html5QrCodeRef.current) {
+          html5QrCodeRef.current.stop().catch(console.error).finally(() => {
+              html5QrCodeRef.current?.clear();
+              html5QrCodeRef.current = null;
+          });
+      }
+  };
 
   const onScanSuccess = (decodedText: string) => {
       if (focusedTaskIndex === null) return;
@@ -569,7 +608,7 @@ export const PickerInterface: React.FC<{ onSwitchToManager: () => void; companyL
           const orderName = order?.name || "Desconhecido";
           
           try {
-            await markOrderComplete(selectedOrderId, finalTasks);
+            await markOrderComplete(selectedOrderId, finalTasks, '', user?.username || user?.email || 'unknown');
             
             const newHistory = [...completedSessions, {
                 name: orderName,
@@ -649,7 +688,7 @@ export const PickerInterface: React.FC<{ onSwitchToManager: () => void; companyL
                    setConfirmModal(prev => ({ ...prev, isOpen: false }));
                    setIsProcessing(true);
                    try {
-                       await markOrderComplete(orderId, []);
+                       await markOrderComplete(orderId, [], '', user?.username || user?.email || 'unknown');
                        await loadCloudData();
                        alert("Pedido forçado a concluído.");
                    } catch(e) {
@@ -689,9 +728,9 @@ export const PickerInterface: React.FC<{ onSwitchToManager: () => void; companyL
              <Scene3D 
                 visualLayout={visualLayout}
                 layoutCoords={layoutCoords}
-                tasks={pickingTasks}
-                searchResults={searchResults}
-                focusedTaskIndex={focusedTaskIndex}
+                tasks={isTransferMode ? [] : pickingTasks} // Hide tasks in transfer mode
+                searchResults={isTransferMode && highlightedBin && layoutCoords.get(highlightedBin) ? [layoutCoords.get(highlightedBin)!] : searchResults}
+                focusedTaskIndex={isTransferMode ? null : focusedTaskIndex}
                 visibleFloor={visibleFloor}
                 isHighlightActive={isHighlightActive}
                 activePathStart={getActivePathStart()}
@@ -708,10 +747,20 @@ export const PickerInterface: React.FC<{ onSwitchToManager: () => void; companyL
                  )}
 
                  <div className="flex gap-2">
-                    <button onClick={() => setIsSetupOpen(true)} className="bg-white dark:bg-gray-800 p-2 rounded-lg border border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 shadow-lg text-[#4fc3f7] transition-colors">
+                    <button 
+                        onClick={() => { 
+                            if (initialMode === 'transfers' && onExit) {
+                                onExit();
+                            } else {
+                                setIsSetupOpen(true); 
+                                setIsTransferMode(false); 
+                            }
+                        }} 
+                        className="bg-white dark:bg-gray-800 p-2 rounded-lg border border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 shadow-lg text-[#4fc3f7] transition-colors"
+                    >
                         <Home size={24} />
                     </button>
-                    {!isSetupOpen && (
+                    {!isSetupOpen && !isTransferMode && (
                         <>
                             <button onClick={loadCloudData} className="bg-white dark:bg-gray-800 p-2 rounded-lg border border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 shadow-lg text-gray-700 dark:text-white transition-colors">
                                 <RefreshCw size={24} className={isRefreshing ? "animate-spin" : ""} />
@@ -732,7 +781,302 @@ export const PickerInterface: React.FC<{ onSwitchToManager: () => void; companyL
              )}
         </div>
 
-        {currentTask && !isSetupOpen && !showFinishModal && (
+        {/* TRANSFER MODE UI */}
+        {isTransferMode && (
+             <div className="absolute inset-x-0 bottom-0 top-[60px] z-30 pointer-events-none flex flex-col justify-end">
+                 {/* Top Info Bar */}
+                 <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-white/90 dark:bg-gray-900/90 backdrop-blur px-6 py-2 rounded-full shadow-lg border border-purple-500/30 pointer-events-auto">
+                     <div className="flex items-center gap-2 text-purple-600 dark:text-purple-400 font-bold">
+                         <ArrowLeftRight size={20} />
+                         <span>TRANSFERÊNCIAS</span>
+                     </div>
+                 </div>
+
+                 {/* Main Content Area */}
+                 <div className="bg-white dark:bg-gray-900 rounded-t-3xl shadow-[0_-10px_40px_rgba(0,0,0,0.2)] pointer-events-auto border-t border-gray-200 dark:border-gray-700 max-h-[85vh] overflow-y-auto transition-colors">
+                     
+                     {/* Step 1 & 4: Location Selection (Origin or Dest) */}
+                     {(transferStep === 'origin' || transferStep === 'dest') && (
+                         <div className="p-4 flex flex-col gap-4">
+                             <div className="flex justify-between items-center">
+                                 <h3 className="text-lg font-bold text-gray-800 dark:text-white">
+                                     {transferStep === 'origin' ? '1. Origem' : '2. Destino'}
+                                 </h3>
+                                 <span className="text-xs text-gray-500 dark:text-gray-400">
+                                     {transferStep === 'origin' ? 'De onde sai?' : 'Para onde vai?'}
+                                 </span>
+                             </div>
+
+                             {/* Initial State: Must Scan First */}
+                             {!tempBinCode && !transferScannerOpen ? (
+                                 <div className="flex flex-col items-center justify-center py-8 gap-4">
+                                     <div className="bg-purple-100 dark:bg-purple-900/20 p-6 rounded-full animate-pulse">
+                                         <QrCode size={48} className="text-purple-600 dark:text-purple-400" />
+                                     </div>
+                                     <p className="text-gray-500 dark:text-gray-400 text-center max-w-[200px]">
+                                         Para iniciar, leia o código QR da posição de {transferStep === 'origin' ? 'origem' : 'destino'}.
+                                     </p>
+                                     <button 
+                                         onClick={() => setTransferScannerOpen(true)}
+                                         className="w-full max-w-xs bg-purple-600 hover:bg-purple-700 text-white py-4 rounded-xl font-bold shadow-lg shadow-purple-900/20 transition-all flex items-center justify-center gap-2"
+                                     >
+                                         <QrCode size={20} /> Ler QR Code
+                                     </button>
+                                 </div>
+                             ) : transferScannerOpen ? (
+                                 <div className="rounded-2xl overflow-hidden border-2 border-purple-500 relative bg-black aspect-square max-h-[50vh] mx-auto w-full">
+                                     <div id="transfer-qr-reader" className="w-full h-full"></div>
+                                     <button 
+                                         onClick={() => setTransferScannerOpen(false)}
+                                         className="absolute top-4 right-4 bg-white/20 backdrop-blur p-2 rounded-full text-white"
+                                     >
+                                         <X size={24} />
+                                     </button>
+                                 </div>
+                             ) : (
+                                 <>
+                                     {/* Minimalistic Manual Adjustment */}
+                                     <div className="space-y-1 relative">
+                                         <ScrollingPicker 
+                                             visualLayout={visualLayout}
+                                             initialBin={tempBinCode}
+                                             onBinChange={(bin) => {
+                                                 setTempBinCode(bin);
+                                                 setHighlightedBin(bin);
+                                                 // Auto-focus floor
+                                                 const node = layoutCoords.get(bin);
+                                                 if (node) {
+                                                     const getFloorId = (x: number) => x < 35 ? 0 : x < 100 ? 1 : 2;
+                                                     setVisibleFloor(getFloorId(node.x));
+                                                 }
+                                             }}
+                                         />
+                                         <button 
+                                            onClick={() => setIsZoomedIn(!isZoomedIn)}
+                                            className="absolute -right-2 top-1/2 -translate-y-1/2 bg-white dark:bg-gray-800 p-2 rounded-full shadow-md border border-gray-200 dark:border-gray-700 text-purple-600 hover:bg-purple-50 z-10"
+                                            title={isZoomedIn ? "Zoom Out" : "Zoom In"}
+                                         >
+                                            {isZoomedIn ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+                                         </button>
+                                     </div>
+
+                                     <button 
+                                         onClick={() => {
+                                             if (!tempBinCode) return;
+                                             if (transferStep === 'origin') {
+                                                 setTransferData(prev => ({ ...prev, originBin: tempBinCode }));
+                                                 setTransferStep('material');
+                                             } else {
+                                                 setTransferData(prev => ({ ...prev, destBin: tempBinCode }));
+                                                 setTransferStep('confirm');
+                                             }
+                                             setTempBinCode('');
+                                             setHighlightedBin(null);
+                                         }}
+                                         className="w-full bg-purple-600 hover:bg-purple-700 text-white py-3 rounded-xl font-bold shadow-lg shadow-purple-900/20 transition-all mt-2"
+                                     >
+                                         Confirmar Posição
+                                     </button>
+                                 </>
+                             )}
+                         </div>
+                     )}
+
+                     {/* Step 2: Material Selection */}
+                     {transferStep === 'material' && (
+                         <div className="p-6 flex flex-col gap-6">
+                             <div className="flex items-center gap-3">
+                                 <button onClick={() => setTransferStep('origin')} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg">
+                                     <ArrowLeft size={20} />
+                                 </button>
+                                 <h3 className="text-xl font-bold text-gray-800 dark:text-white">Selecionar Material</h3>
+                             </div>
+
+                             <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-xl border border-gray-200 dark:border-gray-700">
+                                 <div className="text-xs text-gray-500 uppercase mb-1">Origem</div>
+                                 <div className="font-mono font-bold text-lg">{transferData.originBin}</div>
+                             </div>
+
+                             <div className="space-y-3">
+                                 <div className="text-sm font-bold text-gray-500 uppercase">Materiais Disponíveis</div>
+                                 {stock.filter(s => s.bin === transferData.originBin).length === 0 ? (
+                                     <div className="text-center py-8 text-gray-500">
+                                         Posição vazia ou sem stock registado.
+                                     </div>
+                                 ) : (
+                                     stock.filter(s => s.bin === transferData.originBin).map((item, idx) => (
+                                         <button 
+                                             key={idx}
+                                             onClick={() => {
+                                                 setTransferData(prev => ({ ...prev, material: item.material }));
+                                                 setTransferStep('qty');
+                                             }}
+                                             className="w-full text-left bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-200 dark:border-gray-700 hover:border-purple-500 dark:hover:border-purple-500 shadow-sm transition-all group"
+                                         >
+                                             <div className="flex justify-between items-start mb-1">
+                                                 <span className="font-bold text-lg text-gray-800 dark:text-white group-hover:text-purple-500 transition-colors">
+                                                     {item.material}
+                                                 </span>
+                                                 <span className="bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 text-xs px-2 py-1 rounded-full font-bold">
+                                                     Qtd: {item.qtyAvailable}
+                                                 </span>
+                                             </div>
+                                             <div className="text-sm text-gray-500 dark:text-gray-400 line-clamp-2">
+                                                 {item.description}
+                                             </div>
+                                         </button>
+                                     ))
+                                 )}
+                             </div>
+                         </div>
+                     )}
+
+                     {/* Step 3: Quantity Input */}
+                     {transferStep === 'qty' && (
+                         <div className="p-6 flex flex-col gap-6">
+                             <div className="flex items-center gap-3">
+                                 <button onClick={() => setTransferStep('material')} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg">
+                                     <ArrowLeft size={20} />
+                                 </button>
+                                 <h3 className="text-xl font-bold text-gray-800 dark:text-white">Quantidade</h3>
+                             </div>
+
+                             <div className="bg-purple-50 dark:bg-purple-900/10 p-4 rounded-xl border border-purple-100 dark:border-purple-900/30">
+                                 <div className="text-sm text-purple-800 dark:text-purple-300 font-bold mb-1">{transferData.material}</div>
+                                 <div className="text-xs text-purple-600 dark:text-purple-400">
+                                     Disponível: {stock.find(s => s.material === transferData.material && s.bin === transferData.originBin)?.qtyAvailable || 0}
+                                 </div>
+                             </div>
+
+                             <div className="flex flex-col gap-2">
+                                 <label className="text-sm font-bold text-gray-600 dark:text-gray-400">Quanto quer transferir?</label>
+                                 <input 
+                                     type="number" 
+                                     className="w-full text-4xl font-bold text-center p-4 rounded-xl border-2 border-gray-300 dark:border-gray-600 focus:border-purple-500 focus:ring-0 bg-transparent text-gray-900 dark:text-white"
+                                     placeholder="0"
+                                     autoFocus
+                                     onChange={(e) => {
+                                         const val = parseInt(e.target.value) || 0;
+                                         const max = stock.find(s => s.material === transferData.material && s.bin === transferData.originBin)?.qtyAvailable || 0;
+                                         if (val <= max) {
+                                             setTransferData(prev => ({ ...prev, qty: val }));
+                                         }
+                                     }}
+                                     value={transferData.qty || ''}
+                                 />
+                                 <div className="text-xs text-center text-gray-400">Máximo permitido: {stock.find(s => s.material === transferData.material && s.bin === transferData.originBin)?.qtyAvailable || 0}</div>
+                             </div>
+
+                             <button 
+                                 onClick={() => {
+                                     if (transferData.qty > 0) {
+                                         setTransferStep('dest');
+                                         setTempBinCode(''); // Reset for dest scan
+                                     }
+                                 }}
+                                 disabled={!transferData.qty || transferData.qty <= 0}
+                                 className="w-full bg-purple-600 hover:bg-purple-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white py-4 rounded-xl font-bold shadow-lg shadow-purple-900/20 transition-all mt-4"
+                             >
+                                 Continuar
+                             </button>
+                         </div>
+                     )}
+
+                     {/* Step 5: Confirmation */}
+                     {transferStep === 'confirm' && (
+                         <div className="p-6 flex flex-col gap-6">
+                             <div className="flex items-center gap-3">
+                                 <button onClick={() => setTransferStep('dest')} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg">
+                                     <ArrowLeft size={20} />
+                                 </button>
+                                 <h3 className="text-xl font-bold text-gray-800 dark:text-white">Confirmar Transferência</h3>
+                             </div>
+
+                             <div className="bg-gray-50 dark:bg-gray-800 rounded-2xl p-6 border border-gray-200 dark:border-gray-700 space-y-6">
+                                 <div className="flex items-center gap-4">
+                                     <div className="w-12 h-12 rounded-full bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center text-purple-600 dark:text-purple-400">
+                                         <Package size={24} />
+                                     </div>
+                                     <div>
+                                         <div className="text-xs text-gray-500 uppercase font-bold">Material</div>
+                                         <div className="font-bold text-lg text-gray-900 dark:text-white">{transferData.material}</div>
+                                     </div>
+                                 </div>
+
+                                 <div className="flex items-center justify-between relative">
+                                     <div className="absolute left-6 top-8 bottom-0 w-0.5 bg-gray-200 dark:bg-gray-700 -z-10"></div>
+                                     
+                                     <div className="space-y-6 w-full">
+                                         <div className="flex items-center gap-4">
+                                             <div className="w-12 h-12 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center text-red-600 dark:text-red-400 z-10 ring-4 ring-white dark:ring-gray-800">
+                                                 <ArrowLeft size={20} />
+                                             </div>
+                                             <div>
+                                                 <div className="text-xs text-gray-500 uppercase font-bold">De (Origem)</div>
+                                                 <div className="font-mono font-bold text-lg">{transferData.originBin}</div>
+                                             </div>
+                                         </div>
+
+                                         <div className="flex items-center gap-4">
+                                             <div className="w-12 h-12 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center text-green-600 dark:text-green-400 z-10 ring-4 ring-white dark:ring-gray-800">
+                                                 <ArrowRight size={20} />
+                                             </div>
+                                             <div>
+                                                 <div className="text-xs text-gray-500 uppercase font-bold">Para (Destino)</div>
+                                                 <div className="font-mono font-bold text-lg">{transferData.destBin}</div>
+                                             </div>
+                                         </div>
+                                     </div>
+                                 </div>
+
+                                 <div className="bg-white dark:bg-gray-900 p-4 rounded-xl border border-gray-200 dark:border-gray-700 flex justify-between items-center">
+                                     <span className="font-bold text-gray-600 dark:text-gray-400">Quantidade</span>
+                                     <span className="font-bold text-2xl text-purple-600 dark:text-purple-400">{transferData.qty}</span>
+                                 </div>
+                             </div>
+
+                             <button 
+                                 onClick={async () => {
+                                     setIsProcessing(true);
+                                     try {
+                                         await submitTransfer({
+                                             originBin: transferData.originBin,
+                                             destBin: transferData.destBin,
+                                             material: transferData.material,
+                                             qty: transferData.qty,
+                                             userId: user?.username || user?.email || auth.currentUser?.uid || 'unknown'
+                                         });
+                                         
+                                         alert("Transferência registada com sucesso!");
+                                         
+                                         // Reset
+                                         setTransferStep('origin');
+                                         setTransferData({ originBin: '', material: '', qty: 0, destBin: '' });
+                                         setTempBinCode('');
+                                         setHighlightedBin(null);
+                                         
+                                         // Reload data to reflect changes
+                                         loadCloudData();
+                                     } catch (error: any) {
+                                         console.error("Transfer error:", error);
+                                         alert("Erro ao registar transferência: " + (error.message || "Erro desconhecido"));
+                                     } finally {
+                                         setIsProcessing(false);
+                                     }
+                                 }}
+                                 disabled={isProcessing}
+                                 className="w-full bg-green-600 hover:bg-green-700 text-white py-4 rounded-xl font-bold shadow-lg shadow-green-900/20 transition-all flex items-center justify-center gap-2"
+                             >
+                                 {isProcessing ? <Loader2 className="animate-spin" /> : <CheckCircle />}
+                                 Confirmar Transferência
+                             </button>
+                         </div>
+                     )}
+                 </div>
+             </div>
+         )}
+
+        {currentTask && !isSetupOpen && !showFinishModal && !isTransferMode && (
             <div className="absolute bottom-0 left-0 right-0 p-6 z-10 pointer-events-none flex justify-center">
                  <div className="bg-white/95 dark:bg-gray-900/95 backdrop-blur-md border border-gray-200 dark:border-gray-700 rounded-2xl p-6 max-w-2xl w-full pointer-events-auto shadow-2xl relative transition-colors duration-300">
                       

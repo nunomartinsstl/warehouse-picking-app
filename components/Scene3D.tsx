@@ -289,7 +289,7 @@ const DoorMarker: React.FC<{ position: { x: number, y: number, z: number }, rota
     );
 };
 
-const RackUnit: React.FC<{ unit: Unit; colors: Record<string, string>; dimmed?: boolean }> = ({ unit, colors, dimmed }) => {
+const RackUnit: React.FC<{ unit: Unit; colors: Record<string, string>; dimmed?: boolean; highlightedBin?: string }> = ({ unit, colors, dimmed, highlightedBin }) => {
   const { levels, bays, size } = unit.params;
   const levelConfig = unit.params.levelConfig || [];
 
@@ -308,13 +308,18 @@ const RackUnit: React.FC<{ unit: Unit; colors: Record<string, string>; dimmed?: 
 
   const typeColor = colors[unit.typeId] || '#999';
 
+  // Structural parts are always visible but can be dimmed
   const structuralMatProps = dimmed 
-    ? { transparent: true, opacity: 0.05, depthWrite: false } 
+    ? { transparent: true, opacity: 0.1, depthWrite: false } 
     : { transparent: false, opacity: 1, depthWrite: true };
     
-  const contentMatProps = dimmed 
-    ? { transparent: true, opacity: 0.1, depthWrite: false } 
-    : { transparent: false, opacity: 1, depthWrite: true, roughness: 0.4 };
+  // Default content material (transparent gray)
+  const defaultContentMatProps = { 
+      transparent: true, 
+      opacity: 0.15, 
+      depthWrite: false, 
+      color: "#cccccc" 
+  };
 
   const shelves = [];
   for (let l = 0; l <= levels; l++) {
@@ -357,12 +362,25 @@ const RackUnit: React.FC<{ unit: Unit; colors: Record<string, string>; dimmed?: 
         for (let d = 0; d < levelBins; d++) {
            const x = -halfW + (b * bayWidth) + (bayWidth/2);
            const y = (l * size) + (size/2);
-           const z = -halfD + (d * binDepth) + (binDepth/2);
+           // FLIPPED Z: Depth 1 (d=0) is at +Z (Front), Depth Max is at -Z (Back)
+           const z = halfD - (d * binDepth) - (binDepth/2);
+
+           // Construct bin code: unitId-level-column-depth
+           // Note: levels are 0-based in loop, but usually 1-based in display? 
+           // Based on ScrollingPicker, levels seem to be 0-based now.
+           // Columns (b) are 0-based in loop, but 1-based in display usually.
+           // Depths (d) are 0-based in loop, but 1-based in display usually.
+           const binCode = `${unit.id}-${l}-${b+1}-${d+1}`;
+           const isHighlighted = highlightedBin === binCode;
+
+           const matProps = isHighlighted 
+                ? { color: "#00e676", emissive: "#00e676", emissiveIntensity: 2, transparent: false, opacity: 1, depthWrite: true }
+                : defaultContentMatProps;
 
            contents.push(
               <mesh key={`item-${l}-${b}-${d}`} position={[x, y, z]}>
                  <boxGeometry args={[bayWidth * 0.9, size * 0.85, binDepth * 0.9]} />
-                 <meshStandardMaterial color={typeColor} {...contentMatProps} />
+                 <meshStandardMaterial {...matProps} />
               </mesh>
            );
         }
@@ -475,7 +493,26 @@ const WarehouseContent: React.FC<SceneProps> = ({ visualLayout, layoutCoords, ta
     let target = new THREE.Vector3(60, 0, 0);
     let pos = new THREE.Vector3(60, 100, 100);
 
-    if (isZoomedIn && focusedTaskIndex !== null && tasks[focusedTaskIndex]) {
+    // Prioritize search results (used for transfers/manual selection)
+    if (searchResults.length > 0) {
+        const node = searchResults[0];
+        if (isFinite(node.x) && isFinite(node.y) && isFinite(node.z)) {
+            target.set(node.x, node.y, node.z);
+            
+            // Check if "Extra Zoom" is active (we'll reuse isZoomedIn prop for this for now, or add a new one)
+            // The user asked for "Zoom out slightly" by default, and a button to "Zoom in even more".
+            // Let's assume isZoomedIn prop now controls this "Extra Zoom" state.
+            
+            if (isZoomedIn) {
+                 // Extra Close Zoom
+                 pos.set(node.x + 3, node.y + 2, node.z + 3);
+            } else {
+                 // Default "Slightly Zoomed Out" View
+                 // Enough to see context but focused on the unit
+                 pos.set(node.x + 15, node.y + 15, node.z + 15);
+            }
+        }
+    } else if (isZoomedIn && focusedTaskIndex !== null && tasks[focusedTaskIndex]) {
         const task = tasks[focusedTaskIndex];
         if (task && task.coordinates && isFinite(task.coordinates.x) && isFinite(task.coordinates.y) && isFinite(task.coordinates.z)) {
             const taskPos = new THREE.Vector3(task.coordinates.x, task.coordinates.y, task.coordinates.z);
@@ -483,6 +520,7 @@ const WarehouseContent: React.FC<SceneProps> = ({ visualLayout, layoutCoords, ta
             pos.set(taskPos.x + 10, taskPos.y + 10, taskPos.z + 10);
         }
     } else if (visibleFloor !== null) {
+        // ... (existing floor logic)
         const units = visualLayout.units.filter(u => u.floorIndex === visibleFloor);
         if (units.length > 0) {
              const xs = units.map(u => u.posX).filter(isFinite);
@@ -520,7 +558,7 @@ const WarehouseContent: React.FC<SceneProps> = ({ visualLayout, layoutCoords, ta
         posRef.current.copy(pos);
     }
 
-  }, [visibleFloor, visualLayout, isZoomedIn, focusedTaskIndex, tasks]);
+  }, [visibleFloor, visualLayout, isZoomedIn, focusedTaskIndex, tasks, searchResults]);
 
   // Animation Loop
   useFrame((state, delta) => {
@@ -532,11 +570,18 @@ const WarehouseContent: React.FC<SceneProps> = ({ visualLayout, layoutCoords, ta
       controlsRef.current.target.lerp(targetRef.current, step);
       controlsRef.current.update();
 
-      // Smoothly interpolate camera position
-      state.camera.position.lerp(posRef.current, step);
+      // Only move camera if we are far from the target position (initial fly-to)
+      // Once close, let the user control it.
+      // This is a simple heuristic: if distance > 1, we assume we need to fly there.
+      // But this might prevent small adjustments.
+      // Better: check if the targetRef changed recently? 
+      // For now, let's just NOT force camera position every frame, only target.
+      // But the user asked to "move along with it".
+      // So we will lerp ONLY if the distance is significant, implying a "jump" to a new unit.
       
-      // Ensure camera looks at the (interpolated) target
-      state.camera.lookAt(controlsRef.current.target);
+      if (state.camera.position.distanceTo(posRef.current) > 5) {
+          state.camera.position.lerp(posRef.current, step * 0.5);
+      }
   });
 
   const floorMeshes = useMemo(() => {
@@ -729,9 +774,26 @@ const WarehouseContent: React.FC<SceneProps> = ({ visualLayout, layoutCoords, ta
           />
       ))}
 
-      {visibleUnits.map((unit) => (
-         <RackUnit key={unit.id} unit={unit} colors={typeColors} dimmed={isHighlightActive} />
-      ))}
+      {visibleUnits.map((unit) => {
+         // Check if this unit contains the highlighted bin (search result)
+         const isHighlightedUnit = searchResults.length > 0 && searchResults[0].bin.startsWith(`${unit.id}-`);
+         
+         // If we have a search result (transfer mode), dim everything else
+         const shouldDim = searchResults.length > 0 ? !isHighlightedUnit : isHighlightActive;
+         
+         // Pass the exact bin code to highlight
+         const highlightedBin = searchResults.length > 0 ? searchResults[0].bin : undefined;
+
+         return (
+            <RackUnit 
+                key={unit.id} 
+                unit={unit} 
+                colors={typeColors} 
+                dimmed={shouldDim} 
+                highlightedBin={highlightedBin}
+            />
+         );
+      })}
 
       {/* Tasks */}
       {tasks.map((task, idx) => {
@@ -780,10 +842,6 @@ const WarehouseContent: React.FC<SceneProps> = ({ visualLayout, layoutCoords, ta
       {searchResults.map((node, idx) => {
          return (
             <group key={`search-${idx}`} position={[node.x, node.y, node.z]}>
-                <mesh scale={[1.5, 1.5, 1.5]}>
-                <sphereGeometry args={[0.4, 16, 16]} />
-                <meshStandardMaterial color="#29b6f6" emissive="#29b6f6" emissiveIntensity={1} />
-                </mesh>
                 <Billboard position={[0, 1.2, 0]}>
                 <Text fontSize={0.8} color="#29b6f6" outlineWidth={0.05} outlineColor="#000000">
                     {node.bin}
