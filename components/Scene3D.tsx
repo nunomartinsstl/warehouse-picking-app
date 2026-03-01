@@ -397,8 +397,9 @@ const RackUnit: React.FC<{ unit: Unit; colors: Record<string, string>; dimmed?: 
 };
 
 const WarehouseContent: React.FC<SceneProps> = ({ visualLayout, layoutCoords, tasks, searchResults, focusedTaskIndex, activePathStart, visibleFloor, isHighlightActive, isZoomedIn }) => {
-  const { camera } = useThree();
+  const { camera, gl } = useThree();
   const controlsRef = useRef<any>(null);
+  const isTransitioning = useRef(false);
   
   const typeColors: Record<string, string> = useMemo(() => {
      const map: Record<string, string> = {};
@@ -407,6 +408,18 @@ const WarehouseContent: React.FC<SceneProps> = ({ visualLayout, layoutCoords, ta
      });
      return map;
   }, [visualLayout]);
+
+  // Handle Double Click to Reset View
+  useEffect(() => {
+      const handleDbClick = () => {
+          isTransitioning.current = true;
+      };
+      
+      gl.domElement.addEventListener('dblclick', handleDbClick);
+      return () => {
+          gl.domElement.removeEventListener('dblclick', handleDbClick);
+      };
+  }, [gl]);
 
   // Pre-calculate Obstacles and Floor Bounds for A*
   const floorPathingData = useMemo(() => {
@@ -556,6 +569,7 @@ const WarehouseContent: React.FC<SceneProps> = ({ visualLayout, layoutCoords, ta
         isFinite(pos.x) && isFinite(pos.y) && isFinite(pos.z)) {
         targetRef.current.copy(target);
         posRef.current.copy(pos);
+        isTransitioning.current = true;
     }
 
   }, [visibleFloor, visualLayout, isZoomedIn, focusedTaskIndex, tasks, searchResults]);
@@ -570,17 +584,13 @@ const WarehouseContent: React.FC<SceneProps> = ({ visualLayout, layoutCoords, ta
       controlsRef.current.target.lerp(targetRef.current, step);
       controlsRef.current.update();
 
-      // Only move camera if we are far from the target position (initial fly-to)
-      // Once close, let the user control it.
-      // This is a simple heuristic: if distance > 1, we assume we need to fly there.
-      // But this might prevent small adjustments.
-      // Better: check if the targetRef changed recently? 
-      // For now, let's just NOT force camera position every frame, only target.
-      // But the user asked to "move along with it".
-      // So we will lerp ONLY if the distance is significant, implying a "jump" to a new unit.
-      
-      if (state.camera.position.distanceTo(posRef.current) > 5) {
+      // Only move camera if we are transitioning
+      if (isTransitioning.current) {
           state.camera.position.lerp(posRef.current, step * 0.5);
+          
+          if (state.camera.position.distanceTo(posRef.current) < 0.5) {
+              isTransitioning.current = false;
+          }
       }
   });
 

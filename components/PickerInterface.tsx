@@ -39,7 +39,6 @@ export const PickerInterface: React.FC<{
   const [scanMode, setScanMode] = useState<'recommended' | 'free'>('recommended');
   const [showTaskList, setShowTaskList] = useState(false);
   const [listViewMode, setListViewMode] = useState<'summary' | 'detailed'>('detailed'); // Default to Detailed
-  const [showHistory, setShowHistory] = useState(false);
   const [showFinishModal, setShowFinishModal] = useState(false); // New explicit modal for finishing
   const [completedSessions, setCompletedSessions] = useState<{name: string, date: string, items: number}[]>([]);
   const [isProcessing, setIsProcessing] = useState(false); // Track async operations for buttons
@@ -765,9 +764,6 @@ export const PickerInterface: React.FC<{
                             <button onClick={loadCloudData} className="bg-white dark:bg-gray-800 p-2 rounded-lg border border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 shadow-lg text-gray-700 dark:text-white transition-colors">
                                 <RefreshCw size={24} className={isRefreshing ? "animate-spin" : ""} />
                             </button>
-                            <button onClick={() => setShowHistory(true)} className="bg-white dark:bg-gray-800 p-2 rounded-lg border border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 shadow-lg flex items-center gap-2 px-3 text-gray-700 dark:text-white transition-colors">
-                                <History size={24} /> <span className="hidden sm:inline font-bold">Histórico</span>
-                            </button>
                         </>
                     )}
                  </div>
@@ -1452,55 +1448,7 @@ export const PickerInterface: React.FC<{
             </div>
         )}
 
-        {/* HISTORY MODAL (Now Added) */}
-        {showHistory && (
-            <div className="absolute inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-                <div className="bg-white dark:bg-[#141923] border border-gray-200 dark:border-[#37474f] rounded-2xl w-full max-w-md p-6 shadow-2xl flex flex-col max-h-[80vh] transition-colors">
-                    <div className="flex justify-between items-center mb-4 border-b border-gray-200 dark:border-[#37474f] pb-4">
-                        <h2 className="text-xl font-bold flex items-center gap-2 text-gray-900 dark:text-white">
-                            <History className="text-[#4fc3f7]" /> Histórico Local
-                        </h2>
-                        <button onClick={() => setShowHistory(false)} className="text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white">
-                            <X size={24} />
-                        </button>
-                    </div>
-                    
-                    <div className="flex-1 overflow-y-auto space-y-3 custom-scrollbar">
-                        {completedSessions.length === 0 ? (
-                            <div className="text-center text-gray-500 py-8">Sem histórico recente neste dispositivo.</div>
-                        ) : (
-                            completedSessions.slice().reverse().map((session, idx) => (
-                                <div key={idx} className="bg-gray-50 dark:bg-[#1e2736] border border-gray-200 dark:border-[#37474f] p-4 rounded-xl flex justify-between items-center">
-                                    <div className="overflow-hidden">
-                                        <div className="font-bold text-gray-900 dark:text-white truncate">{session.name}</div>
-                                        <div className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1">
-                                            <Calendar size={10} /> {session.date}
-                                        </div>
-                                    </div>
-                                    <div className="flex-shrink-0 bg-[#00e676]/20 text-[#00e676] px-3 py-1 rounded-full text-xs font-bold border border-[#00e676]/30">
-                                        {session.items} itens
-                                    </div>
-                                </div>
-                            ))
-                        )}
-                    </div>
-
-                    <div className="mt-4 pt-4 border-t border-gray-200 dark:border-[#37474f]">
-                        <button 
-                            onClick={() => {
-                                if(confirm("Limpar histórico local?")) {
-                                    setCompletedSessions([]);
-                                    localStorage.removeItem('picker_history');
-                                }
-                            }}
-                            className="w-full text-red-500 text-sm hover:text-red-700 dark:hover:text-red-400 flex justify-center items-center gap-2"
-                        >
-                            <Trash2 size={16} /> Limpar Histórico
-                        </button>
-                    </div>
-                </div>
-            </div>
-        )}
+        {/* HISTORY MODAL REMOVED */}
 
         {isScannerOpen && (
             <div className="absolute inset-0 z-50 bg-black/90 flex flex-col items-center justify-center p-4">

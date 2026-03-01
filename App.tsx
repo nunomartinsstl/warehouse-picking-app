@@ -339,22 +339,11 @@ const App: React.FC = () => {
                 </div>
               )}
 
-              {/* Mode Switcher Button (Only visible if already in app) */}
-              <button
-                onClick={() => {
-                    setAuthStage('mode_select');
-                }}
-                className="bg-gray-800 hover:bg-gray-700 border border-gray-600 p-2 rounded-full shadow-lg backdrop-blur-sm transition-all text-gray-300"
-                title="Mudar Modo"
-              >
-                  {appMode === 'picking' ? <Package size={20} /> : 
-                   appMode === 'receiving' ? <Archive size={20} /> : 
-                   <ArrowLeftRight size={20} />}
-              </button>
+              {/* Mode Switcher Button Removed */}
 
               <button 
                 onClick={handleLogout}
-                className="bg-red-900/30 hover:bg-red-900/50 text-red-400 p-2 rounded-full border border-red-900/50 shadow-lg backdrop-blur-sm transition-all"
+                className="fixed bottom-4 left-4 z-[100] bg-red-900/30 hover:bg-red-900/50 text-red-400 p-2 rounded-full border border-red-900/50 shadow-lg backdrop-blur-sm transition-all"
                 title="Sair"
               >
                   <LogOut size={20} />
