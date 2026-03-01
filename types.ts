@@ -136,3 +136,22 @@ export interface ReceiptData {
     date: string;
     userId: string;
 }
+
+// --- IMPORTED LAYOUT TYPES ---
+export interface ImportedWarehouse {
+    id: number;
+    name: string;
+    width: number;
+    depth: number;
+    floors: { id: number; name: string }[];
+    storageTypes: StorageType[];
+    unitsData: Unit[]; // The JSON uses 'unitsData' but structure matches Unit (mostly)
+    nextId: number;
+}
+
+export interface ImportedLayoutJson {
+    version: string;
+    warehouses: ImportedWarehouse[];
+    currentWarehouseIndex: number;
+    colors: { bg: string; grid: string; floor: string };
+}

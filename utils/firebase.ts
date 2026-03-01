@@ -584,3 +584,30 @@ export const markOrderComplete = async (orderId: string, pickedItems: PickingTas
         throw e;
     }
 };
+
+// --- LAYOUT FUNCTIONS ---
+
+export const saveLayoutToCloud = async (layoutJson: any) => {
+    const database = ensureDb();
+    try {
+        await database.ref('nexus_layout').set(layoutJson);
+        console.log("Layout saved successfully.");
+    } catch (e) {
+        console.error("Error saving layout:", e);
+        throw e;
+    }
+};
+
+export const fetchLayoutFromCloud = async (): Promise<any | null> => {
+    const database = ensureDb();
+    try {
+        const snapshot = await database.ref('nexus_layout').once('value');
+        if (snapshot.exists()) {
+            return snapshot.val();
+        }
+        return null;
+    } catch (e) {
+        console.error("Error fetching layout:", e);
+        return null;
+    }
+};

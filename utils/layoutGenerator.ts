@@ -1,16 +1,14 @@
 import { WarehouseLayout, LayoutNode, Unit } from '../types';
 
-export const generateLayoutCoords = (visualLayout: WarehouseLayout): Map<string, LayoutNode> => {
-    const map = new Map<string, LayoutNode>();
+export const generateLayoutCoords = (layout: WarehouseLayout): Map<string, LayoutNode> => {
+    const coords = new Map<string, LayoutNode>();
 
-    if (!visualLayout) return map;
-
-    visualLayout.units.forEach(unit => {
-        const { levels, bays, size } = unit.params;
+    layout.units.forEach(unit => {
+        const { levels, size } = unit.params;
         const levelConfig = unit.params.levelConfig || [];
 
         // Determine dimensions
-        let maxBays = bays;
+        let maxBays = unit.params.bays;
         let maxBins = unit.params.bins;
         
         if (levelConfig.length > 0) {
@@ -19,17 +17,13 @@ export const generateLayoutCoords = (visualLayout: WarehouseLayout): Map<string,
         }
 
         const rackWidth = maxBays * size;
-        const rackHeight = levels * size;
         const rackDepth = maxBins * size;
-
+        
         const halfW = rackWidth / 2;
         const halfD = rackDepth / 2;
 
-        // Find type name
-        const typeName = visualLayout.storageTypes.find(t => t.id === unit.typeId)?.name || 'Unknown';
-
         for (let l = 0; l < levels; l++) {
-            const currentLevelConfig = levelConfig[l] || { bays: bays, bins: unit.params.bins };
+            const currentLevelConfig = levelConfig[l] || { bays: unit.params.bays, bins: unit.params.bins };
             const levelBays = currentLevelConfig.bays;
             const levelBins = currentLevelConfig.bins;
             
@@ -38,43 +32,40 @@ export const generateLayoutCoords = (visualLayout: WarehouseLayout): Map<string,
 
             for (let b = 0; b < levelBays; b++) {
                 for (let d = 0; d < levelBins; d++) {
-                    // Local Coordinates (relative to unit center)
-                    const localX = -halfW + (b * bayWidth) + (bayWidth / 2);
-                    const localY = (l * size) + (size / 2);
-                    
-                    // FLIPPED Z LOGIC: Depth 1 (d=0) is at +Z (Front), Depth Max is at -Z (Back)
-                    const localZ = halfD - (d * binDepth) - (binDepth / 2);
+                    // Local coordinates (relative to unit center)
+                    // Matches RackUnit logic in Scene3D.tsx
+                    const localX = -halfW + (b * bayWidth) + (bayWidth/2);
+                    const localY = (l * size) + (size/2);
+                    // FLIPPED Z: Depth 1 (d=0) is at +Z (Front), Depth Max is at -Z (Back)
+                    const localZ = halfD - (d * binDepth) - (binDepth/2);
 
                     // Transform to World Coordinates
-                    // Rotate around Y axis
-                    const cos = Math.cos(-unit.rotY); // Three.js rotation is counter-clockwise, but our data might be different. 
-                    // RackUnit uses rotation={[0, -unit.rotY, 0]}. 
-                    // Standard rotation matrix for Y:
-                    // x' = x cos - z sin
-                    // z' = x sin + z cos
-                    // But RackUnit applies rotation to the group.
-                    // So we need to apply the SAME rotation to our point.
-                    // The group rotation is -unit.rotY.
-                    const sin = Math.sin(-unit.rotY);
+                    // Rotation is around Y axis. Scene3D uses rotation={[0, -unit.rotY, 0]}
+                    // So we rotate by -unit.rotY
+                    const theta = -unit.rotY;
+                    const cosTheta = Math.cos(theta);
+                    const sinTheta = Math.sin(theta);
 
-                    const rotatedX = localX * cos - localZ * sin;
-                    const rotatedZ = localX * sin + localZ * cos;
+                    // Rotate local X and Z
+                    const rotatedX = localX * cosTheta - localZ * sinTheta;
+                    const rotatedZ = localX * sinTheta + localZ * cosTheta;
 
                     const worldX = unit.posX + rotatedX;
-                    const worldY = localY; // No vertical rotation
+                    const worldY = localY; // Assuming unit is at Y=0
                     const worldZ = unit.posZ + rotatedZ;
 
-                    // Bin Code: unitId-level-column-depth
-                    // Levels: 0-based in loop, but usually displayed as 0-based in this app?
-                    // Columns (b): 0-based in loop, displayed as 1-based.
-                    // Depths (d): 0-based in loop, displayed as 1-based.
-                    const binCode = `${unit.id}-${l}-${b + 1}-${d + 1}`;
+                    // Construct bin code: unitId-level-column-depth
+                    const binCode = `${unit.id}-${l}-${b+1}-${d+1}`;
+                    
+                    // Find type name
+                    const typeDef = layout.storageTypes.find(t => t.id === unit.typeId);
+                    const typeName = typeDef ? typeDef.name : 'Unknown';
 
-                    map.set(binCode, {
+                    coords.set(binCode, {
                         bin: binCode,
-                        x: worldX,
-                        y: worldY,
-                        z: worldZ,
+                        x: Number(worldX.toFixed(2)),
+                        y: Number(worldY.toFixed(2)),
+                        z: Number(worldZ.toFixed(2)),
                         type: typeName
                     });
                 }
@@ -82,5 +73,30 @@ export const generateLayoutCoords = (visualLayout: WarehouseLayout): Map<string,
         }
     });
 
-    return map;
+    return coords;
+};
+
+export const parseUploadedLayout = (json: any): WarehouseLayout => {
+    // Handle the specific JSON format provided by user
+    // It has "warehouses" array. We take the first one or the one matching currentWarehouseIndex
+    
+    let targetWarehouse = json;
+
+    if (json.warehouses && Array.isArray(json.warehouses)) {
+        const index = json.currentWarehouseIndex || 0;
+        targetWarehouse = json.warehouses[index];
+    }
+
+    // Map unitsData to units if necessary
+    const units = targetWarehouse.units || targetWarehouse.unitsData || [];
+
+    return {
+        version: json.version || "8.0",
+        whWidth: targetWarehouse.width || 50,
+        whDepth: targetWarehouse.depth || 50,
+        floors: targetWarehouse.floors || [],
+        storageTypes: targetWarehouse.storageTypes || [],
+        units: units,
+        colors: json.colors
+    };
 };

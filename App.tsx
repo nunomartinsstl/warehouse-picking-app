@@ -359,7 +359,7 @@ const App: React.FC = () => {
                   user={currentUser}
               />
           ) : view === 'manager' ? (
-             <ManagerPlatform onBack={() => setView('picker')} />
+             <ManagerPlatform onBack={() => setView('picker')} user={currentUser} />
           ) : (
              <PickerInterface 
                 onSwitchToManager={() => setView('manager')} 

@@ -3,12 +3,12 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Scene3D } from './Scene3D';
 import { LayoutNode, OrderItem, PickingTask, StockItem, CloudOrder, WarehouseLayout, User } from '../types';
 import { generatePickingList, reorderRemainingTasks, FLOORS } from '../utils/optimizer';
-import { fetchStockFromCloud, fetchOpenOrdersFromCloud, markOrderComplete, updateOrderStatus, submitTransfer, auth, fetchOrder } from '../utils/firebase';
+import { fetchStockFromCloud, fetchOpenOrdersFromCloud, markOrderComplete, updateOrderStatus, submitTransfer, auth, fetchOrder, saveLayoutToCloud, fetchLayoutFromCloud } from '../utils/firebase';
 import { DEFAULT_LAYOUT_COORDS, DEFAULT_VISUAL_LAYOUT } from '../utils/defaults';
 import { ScrollingPicker } from './ScrollingPicker';
-import { Home, CheckCircle, Navigation, Package, ArrowRight, ArrowLeft, Clock, QrCode, List, X, RefreshCw, History, AlertTriangle, Box, MapPin, Play, Trash2, Upload, EyeOff, Save, AlignJustify, Layers, Loader2, Zap, ZoomIn, ZoomOut, Calendar, Search, ArrowLeftRight, Minimize2, Maximize2 } from 'lucide-react';
+import { Home, CheckCircle, Navigation, Package, ArrowRight, ArrowLeft, Clock, QrCode, List, X, RefreshCw, History, AlertTriangle, Box, MapPin, Play, Trash2, Upload, EyeOff, Save, AlignJustify, Layers, Loader2, Zap, ZoomIn, ZoomOut, Calendar, Search, ArrowLeftRight, Minimize2, Maximize2, Settings } from 'lucide-react';
 import { Html5Qrcode } from 'html5-qrcode';
-import { generateLayoutCoords } from '../utils/layoutGenerator';
+import { generateLayoutCoords, parseUploadedLayout } from '../utils/layoutGenerator';
 
 export const PickerInterface: React.FC<{ 
     onSwitchToManager: () => void; 
@@ -87,17 +87,70 @@ export const PickerInterface: React.FC<{
 
   const html5QrCodeRef = useRef<Html5Qrcode | null>(null);
   const tempTaskRef = useRef<PickingTask | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleLayoutUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Check if any order is in process (fetch fresh data)
+    const freshOrders = await fetchOpenOrdersFromCloud();
+    const inProcess = freshOrders.some(o => o.status === 'IN PROCESS');
+    
+    if (inProcess) {
+        alert("Não é possível atualizar o layout enquanto houver encomendas em processo.");
+        if (fileInputRef.current) fileInputRef.current.value = '';
+        return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+        try {
+            const json = JSON.parse(event.target?.result as string);
+            const parsedLayout = parseUploadedLayout(json);
+            
+            // Save to cloud
+            await saveLayoutToCloud(json); // Save original JSON
+            
+            // Update local state
+            setVisualLayout(parsedLayout);
+            const newCoords = generateLayoutCoords(parsedLayout);
+            setLayoutCoords(newCoords);
+            
+            alert("Layout atualizado com sucesso!");
+        } catch (err) {
+            console.error(err);
+            alert("Erro ao processar o ficheiro de layout.");
+        }
+        if (fileInputRef.current) fileInputRef.current.value = '';
+    };
+    reader.readAsText(file);
+  };
 
   // Initialize Defaults & Restore Session
   useEffect(() => {
-    // Load Defaults
-    // Use generated layout coords instead of hardcoded ones to ensure consistency with Scene3D
-    const map = generateLayoutCoords(DEFAULT_VISUAL_LAYOUT);
-    setLayoutCoords(map);
-    setVisualLayout(DEFAULT_VISUAL_LAYOUT);
+    const init = async () => {
+        // Load Layout from Cloud
+        const cloudLayout = await fetchLayoutFromCloud();
+        let layoutToUse = DEFAULT_VISUAL_LAYOUT;
+        
+        if (cloudLayout) {
+            try {
+                layoutToUse = parseUploadedLayout(cloudLayout);
+            } catch (e) {
+                console.error("Failed to parse cloud layout, using default", e);
+            }
+        }
 
-    // Load Cloud Data (Default)
-    loadCloudData();
+        const map = generateLayoutCoords(layoutToUse);
+        setLayoutCoords(map);
+        setVisualLayout(layoutToUse);
+
+        // Load Cloud Data (Default)
+        loadCloudData();
+    };
+
+    init();
 
     // Restore History
     const history = localStorage.getItem('picker_history');
@@ -1404,6 +1457,22 @@ export const PickerInterface: React.FC<{
                          >
                              <Search size={18} /> Pesquisar Stock
                          </button>
+
+                         {user && user.role === 'ADMIN' && (
+                            <button 
+                                onClick={() => fileInputRef.current?.click()} 
+                                className="w-full bg-gray-100 dark:bg-[#1e2736] hover:bg-gray-200 dark:hover:bg-[#263238] text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-[#37474f] py-3 rounded-lg font-bold flex justify-center items-center gap-2 transition-colors text-sm"
+                            >
+                                <Settings size={18} /> Atualizar Layout
+                            </button>
+                         )}
+                         <input 
+                            type="file" 
+                            ref={fileInputRef} 
+                            style={{ display: 'none' }} 
+                            accept=".json" 
+                            onChange={handleLayoutUpload} 
+                         />
 
                          <button 
                             onClick={onSwitchToManager} 

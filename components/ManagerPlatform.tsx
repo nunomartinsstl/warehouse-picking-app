@@ -1,25 +1,31 @@
 import React, { useState, useEffect } from 'react';
-import { CheckCircle, Trash2, RefreshCw, ArrowLeft, Clock, List, X, RotateCcw } from 'lucide-react';
-import { fetchCompletedOrdersFromCloud, deleteOrder, fetchOpenOrdersFromCloud, revertOrderToOpen } from '../utils/firebase';
-import { CloudOrder } from '../types';
+import { CheckCircle, Trash2, RefreshCw, ArrowLeft, Clock, List, X, RotateCcw, Layout, Save, Upload } from 'lucide-react';
+import { fetchCompletedOrdersFromCloud, deleteOrder, fetchOpenOrdersFromCloud, revertOrderToOpen, saveLayoutToCloud } from '../utils/firebase';
+import { CloudOrder, User, WarehouseLayout, ImportedLayoutJson } from '../types';
 
 interface ManagerPlatformProps {
     onBack: () => void;
+    user: User | null;
 }
 
-export const ManagerPlatform: React.FC<ManagerPlatformProps> = ({ onBack }) => {
-    const [activeTab, setActiveTab] = useState<'open_orders' | 'finished_orders'>('open_orders');
+export const ManagerPlatform: React.FC<ManagerPlatformProps> = ({ onBack, user }) => {
+    const [activeTab, setActiveTab] = useState<'open_orders' | 'finished_orders' | 'layout'>('open_orders');
     const [isLoading, setIsLoading] = useState(false);
     
     // Data State
     const [openOrders, setOpenOrders] = useState<CloudOrder[]>([]);
     const [completedOrders, setCompletedOrders] = useState<CloudOrder[]>([]);
     
+    // Layout State
+    const [layoutJsonInput, setLayoutJsonInput] = useState('');
+    
     // Selection for Details Modal
     const [selectedOrder, setSelectedOrder] = useState<CloudOrder | null>(null);
 
     useEffect(() => {
-        loadData();
+        if (activeTab !== 'layout') {
+            loadData();
+        }
     }, [activeTab]);
 
     const loadData = async () => {
@@ -34,6 +40,44 @@ export const ManagerPlatform: React.FC<ManagerPlatformProps> = ({ onBack }) => {
             }
         } catch (e) {
             console.error(e);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const handleLayoutUpload = async () => {
+        if (!layoutJsonInput.trim()) return;
+        
+        if (!confirm("Tem a certeza que deseja atualizar o layout? Isto irá afetar todos os utilizadores.")) return;
+
+        setIsLoading(true);
+        try {
+            const json: ImportedLayoutJson = JSON.parse(layoutJsonInput);
+            
+            // Validate basic structure
+            if (!json.warehouses || !Array.isArray(json.warehouses)) {
+                throw new Error("JSON inválido: array 'warehouses' em falta.");
+            }
+            
+            const currentWh = json.warehouses[json.currentWarehouseIndex || 0];
+            if (!currentWh) throw new Error("Armazém atual não encontrado no índice especificado.");
+            
+            // Map to WarehouseLayout
+            const layout: WarehouseLayout = {
+                version: json.version || "8.0",
+                whWidth: currentWh.width,
+                whDepth: currentWh.depth,
+                floors: currentWh.floors,
+                storageTypes: currentWh.storageTypes,
+                units: currentWh.unitsData // Assuming structure is compatible
+            };
+            
+            await saveLayoutToCloud(layout);
+            alert("Layout atualizado com sucesso!");
+            setLayoutJsonInput('');
+        } catch (e: any) {
+            console.error(e);
+            alert("Erro ao atualizar layout: " + e.message);
         } finally {
             setIsLoading(false);
         }
@@ -104,11 +148,62 @@ export const ManagerPlatform: React.FC<ManagerPlatformProps> = ({ onBack }) => {
                         <CheckCircle size={18} className={activeTab === 'finished_orders' ? 'text-[#00e676]' : ''} />
                         Pedidos Concluídos
                     </button>
+
+                    {user?.role === 'ADMIN' && (
+                        <button 
+                            onClick={() => setActiveTab('layout')}
+                            className={`pb-3 px-2 text-sm font-bold border-b-2 transition-all whitespace-nowrap flex items-center gap-2 ${activeTab === 'layout' ? 'border-[#c800ff] text-[#c800ff]' : 'border-transparent text-gray-400 hover:text-white'}`}
+                        >
+                            <Layout size={18} className={activeTab === 'layout' ? 'text-[#c800ff]' : ''} />
+                            Layout
+                        </button>
+                    )}
                 </div>
             </div>
 
             {/* Content */}
             <div className="flex-1 overflow-y-auto p-4 md:p-6 bg-gray-900 scroll-smooth transition-colors">
+                 {/* LAYOUT VIEW */}
+                 {activeTab === 'layout' && user?.role === 'ADMIN' && (
+                    <div className="max-w-4xl mx-auto pb-10">
+                        <div className="bg-gray-800 rounded-xl border border-gray-700 p-6 shadow-lg">
+                            <div className="flex items-center gap-3 mb-6">
+                                <div className="bg-[#c800ff]/20 p-3 rounded-full">
+                                    <Layout size={24} className="text-[#c800ff]" />
+                                </div>
+                                <div>
+                                    <h2 className="text-xl font-bold text-white">Atualizar Layout do Armazém</h2>
+                                    <p className="text-gray-400 text-sm">Cole o JSON do novo layout abaixo. Esta ação é irreversível.</p>
+                                </div>
+                            </div>
+
+                            <textarea
+                                value={layoutJsonInput}
+                                onChange={(e) => setLayoutJsonInput(e.target.value)}
+                                placeholder='Cole aqui o JSON...'
+                                className="w-full h-64 bg-gray-900 border border-gray-700 rounded-lg p-4 text-xs font-mono text-gray-300 focus:border-[#c800ff] focus:outline-none mb-4 resize-y"
+                            />
+
+                            <div className="flex justify-end gap-4">
+                                <button
+                                    onClick={() => setLayoutJsonInput('')}
+                                    className="px-4 py-2 text-gray-400 hover:text-white transition-colors"
+                                >
+                                    Limpar
+                                </button>
+                                <button
+                                    onClick={handleLayoutUpload}
+                                    disabled={!layoutJsonInput.trim() || isLoading}
+                                    className="bg-[#c800ff] hover:bg-[#a000cc] text-white font-bold py-2 px-6 rounded-lg shadow-lg flex items-center gap-2 transition-transform active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    {isLoading ? <RefreshCw className="animate-spin" size={18} /> : <Save size={18} />}
+                                    Atualizar Layout
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                 )}
+
                  {/* OPEN ORDERS VIEW */}
                  {activeTab === 'open_orders' && (
                     <div className="space-y-4 max-w-4xl mx-auto pb-10">
