@@ -3,7 +3,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Scene3D } from './Scene3D';
 import { LayoutNode, OrderItem, PickingTask, StockItem, CloudOrder, WarehouseLayout, User } from '../types';
 import { generatePickingList, reorderRemainingTasks, FLOORS } from '../utils/optimizer';
-import { fetchStockFromCloud, fetchOpenOrdersFromCloud, markOrderComplete, updateOrderStatus, submitTransfer, auth } from '../utils/firebase';
+import { fetchStockFromCloud, fetchOpenOrdersFromCloud, markOrderComplete, updateOrderStatus, submitTransfer, auth, fetchOrder } from '../utils/firebase';
 import { DEFAULT_LAYOUT_COORDS, DEFAULT_VISUAL_LAYOUT } from '../utils/defaults';
 import { ScrollingPicker } from './ScrollingPicker';
 import { Home, CheckCircle, Navigation, Package, ArrowRight, ArrowLeft, Clock, QrCode, List, X, RefreshCw, History, AlertTriangle, Box, MapPin, Play, Trash2, Upload, EyeOff, Save, AlignJustify, Layers, Loader2, Zap, ZoomIn, ZoomOut, Calendar, Search, ArrowLeftRight, Minimize2, Maximize2 } from 'lucide-react';
@@ -548,56 +548,95 @@ export const PickerInterface: React.FC<{
       return;
     }
 
-    const validOrders: OrderItem[] = [];
-    const skipped: OrderItem[] = [];
+    setIsProcessing(true);
 
-    for (const item of orders) {
-        const matchingStock = stock.filter(s => s.material === item.material);
-        if (matchingStock.length === 0) {
-             skipped.push(item);
-             continue;
+    try {
+        // Check availability
+        if (selectedOrderId) {
+             const freshOrder = await fetchOrder(selectedOrderId);
+             if (!freshOrder) {
+                 alert("Erro: Encomenda não encontrada.");
+                 setIsProcessing(false);
+                 return;
+             }
+             
+             const currentUserIdentifier = user?.username || user?.email || 'unknown';
+             
+             if (freshOrder.status === 'IN PROCESS' && freshOrder.pickedBy && freshOrder.pickedBy !== currentUserIdentifier) {
+                 alert(`Esta encomenda já está a ser processada por: ${freshOrder.pickedBy}`);
+                 setIsProcessing(false);
+                 return;
+             }
+             
+             if (freshOrder.status === 'COMPLETED') {
+                 alert("Esta encomenda já foi completada.");
+                 setIsProcessing(false);
+                 return;
+             }
         }
-        const hasValidBin = matchingStock.some(s => s.bin && layoutCoords.has(s.bin));
-        if (!hasValidBin) {
-            skipped.push(item);
-        } else {
-            validOrders.push(item);
+
+        const validOrders: OrderItem[] = [];
+        const skipped: OrderItem[] = [];
+
+        for (const item of orders) {
+            const matchingStock = stock.filter(s => s.material === item.material);
+            if (matchingStock.length === 0) {
+                 skipped.push(item);
+                 continue;
+            }
+            const hasValidBin = matchingStock.some(s => s.bin && layoutCoords.has(s.bin));
+            if (!hasValidBin) {
+                skipped.push(item);
+            } else {
+                validOrders.push(item);
+            }
         }
-    }
 
-    if (skipped.length > 0) {
-        alert(`Aviso: ${skipped.length} materiais não têm localização 3D definida ou stock.`);
-    }
-
-    if (validOrders.length === 0) {
-        alert("Erro: Nenhum dos materiais da encomenda tem localização válida no layout.");
-        return;
-    }
-
-    const tasks = generatePickingList(validOrders, stock, layoutCoords);
-    
-    if (tasks.length === 0) {
-        alert("Erro: A lista de picking gerada está vazia.");
-        return;
-    }
-    
-    if (selectedOrderId) {
-        try {
-            await updateOrderStatus(selectedOrderId, 'IN PROCESS');
-        } catch (error) {
-            console.error("Failed to update status to IN PROCESS:", error);
+        if (skipped.length > 0) {
+            alert(`Aviso: ${skipped.length} materiais não têm localização 3D definida ou stock.`);
         }
-    }
 
-    setPickingTasks(tasks);
-    setSkippedItems(skipped);
-    setCompletedTasks([]);
-    setFocusedTaskIndex(0);
-    setVisibleFloor(tasks[0].floorId);
-    setCurrentSessionId(selectedOrderId); 
-    setIsSetupOpen(false);
-    
-    loadCloudData();
+        if (validOrders.length === 0) {
+            alert("Erro: Nenhum dos materiais da encomenda tem localização válida no layout.");
+            setIsProcessing(false);
+            return;
+        }
+
+        const tasks = generatePickingList(validOrders, stock, layoutCoords);
+        
+        if (tasks.length === 0) {
+            alert("Erro: A lista de picking gerada está vazia.");
+            setIsProcessing(false);
+            return;
+        }
+        
+        if (selectedOrderId) {
+            try {
+                const currentUserIdentifier = user?.username || user?.email || 'unknown';
+                await updateOrderStatus(selectedOrderId, 'IN PROCESS', currentUserIdentifier);
+            } catch (error) {
+                console.error("Failed to update status to IN PROCESS:", error);
+                alert("Erro ao atualizar estado da encomenda. Verifique a conexão.");
+                setIsProcessing(false);
+                return;
+            }
+        }
+
+        setPickingTasks(tasks);
+        setSkippedItems(skipped);
+        setCompletedTasks([]);
+        setFocusedTaskIndex(0);
+        setVisibleFloor(tasks[0].floorId);
+        setCurrentSessionId(selectedOrderId); 
+        setIsSetupOpen(false);
+        
+        loadCloudData();
+    } catch (e) {
+        console.error("Error in generateRoute:", e);
+        alert("Ocorreu um erro ao gerar a rota.");
+    } finally {
+        setIsProcessing(false);
+    }
   };
 
   const finishOrder = async (finalTasks: PickingTask[]) => {

@@ -263,6 +263,31 @@ export const submitTransfer = async (data: { originBin: string, destBin: string,
 
 // --- ORDER FUNCTIONS ---
 
+export const fetchOrder = async (orderId: string): Promise<CloudOrder | null> => {
+    const database = ensureDb();
+    try {
+        const snapshot = await database.ref(`nexus_orders/${orderId}`).once('value');
+        if (snapshot.exists()) {
+            const rawOrder = snapshot.val();
+            return {
+                id: orderId,
+                name: rawOrder.title || rawOrder.name || 'Sem Nome',
+                status: rawOrder.status || 'OPEN',
+                createdAt: rawOrder.dateCreated || rawOrder.createdAt || new Date().toISOString(),
+                pickedBy: rawOrder.pickedBy,
+                items: (rawOrder.items || []).map((i: any) => ({
+                    material: i.sku || i.material,
+                    qty: Number(i.quantity || i.qty)
+                }))
+            } as CloudOrder;
+        }
+        return null;
+    } catch (e) {
+        console.error(`Error fetching order ${orderId}:`, e);
+        throw e;
+    }
+};
+
 export const fetchOpenOrdersFromCloud = async (): Promise<CloudOrder[]> => {
     const database = ensureDb();
     try {
@@ -372,6 +397,7 @@ export const revertOrderToOpen = async (orderId: string) => {
     
     updates[`/nexus_orders/${orderId}/status`] = 'OPEN';
     updates[`/nexus_orders/${orderId}/completedAt`] = null;
+    updates[`/nexus_orders/${orderId}/pickedBy`] = null;
     updates[`/nexus_orders/${orderId}/pickedItems`] = null;
     updates[`/nexus_orders/${orderId}/excelReport`] = null;
     updates[`/nexus_orders/${orderId}/exportData`] = null;
@@ -385,7 +411,7 @@ export const revertOrderToOpen = async (orderId: string) => {
     }
 };
 
-export const updateOrderStatus = async (orderId: string, newStatus: 'OPEN' | 'IN PROCESS' | 'COMPLETED') => {
+export const updateOrderStatus = async (orderId: string, newStatus: 'OPEN' | 'IN PROCESS' | 'COMPLETED', pickedBy?: string) => {
     const database = ensureDb();
     
     const updates: any = {};
@@ -393,6 +419,10 @@ export const updateOrderStatus = async (orderId: string, newStatus: 'OPEN' | 'IN
     
     if (newStatus === 'COMPLETED') {
         updates[`/nexus_orders/${orderId}/completedAt`] = new Date().toISOString();
+    }
+
+    if (pickedBy) {
+        updates[`/nexus_orders/${orderId}/pickedBy`] = pickedBy;
     }
 
     try {

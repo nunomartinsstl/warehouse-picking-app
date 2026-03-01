@@ -115,6 +115,7 @@ export interface CloudOrder {
     createdAt: string; // ISO String
     completedAt?: string; // ISO String
     pickerId?: string;
+    pickedBy?: string; // Username or Email of the picker
     pickedItems?: PickingTask[]; // Store the results
     excelReport?: string; // Base64 string of the generated Excel file
     isUploaded?: boolean; // Local state flag
