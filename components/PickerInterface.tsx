@@ -895,23 +895,20 @@ export const PickerInterface: React.FC<{
                                  </span>
                              </div>
 
-                             {/* Initial State: Must Scan First */}
-                             {!tempBinCode && !transferScannerOpen ? (
-                                 <div className="flex flex-col items-center justify-center py-8 gap-4">
-                                     <div className="bg-purple-100 dark:bg-purple-900/20 p-6 rounded-full animate-pulse">
-                                         <QrCode size={48} className="text-purple-600 dark:text-purple-400" />
-                                     </div>
-                                     <p className="text-gray-500 dark:text-gray-400 text-center max-w-[200px]">
-                                         Para iniciar, leia o código QR da posição de {transferStep === 'origin' ? 'origem' : 'destino'}.
-                                     </p>
-                                     <button 
-                                         onClick={() => setTransferScannerOpen(true)}
-                                         className="w-full max-w-xs bg-purple-600 hover:bg-purple-700 text-white py-4 rounded-xl font-bold shadow-lg shadow-purple-900/20 transition-all flex items-center justify-center gap-2"
-                                     >
-                                         <QrCode size={20} /> Ler QR Code
-                                     </button>
-                                 </div>
-                             ) : transferScannerOpen ? (
+                            {/* Initial State: Must Scan First */}
+                            {!tempBinCode && !transferScannerOpen ? (
+                                <div className="flex flex-col items-center justify-center py-6 gap-3">
+                                    <button 
+                                        onClick={() => setTransferScannerOpen(true)}
+                                        className="bg-purple-100 dark:bg-purple-900/20 p-5 rounded-full animate-pulse shadow-[0_0_20px_rgba(168,85,247,0.5)] hover:shadow-[0_0_40px_rgba(168,85,247,0.8)] transition-all duration-300 group cursor-pointer"
+                                    >
+                                        <QrCode size={56} className="text-purple-600 dark:text-purple-400 group-hover:scale-110 transition-transform" />
+                                    </button>
+                                    <p className="text-gray-500 dark:text-gray-400 text-center max-w-[200px] text-xs">
+                                        Toque no ícone para ler o código QR da posição de <span className="font-bold text-purple-600 dark:text-purple-400">{transferStep === 'origin' ? 'origem' : 'destino'}</span>.
+                                    </p>
+                                </div>
+                            ) : transferScannerOpen ? (
                                  <div className="rounded-2xl overflow-hidden border-2 border-purple-500 relative bg-black aspect-square max-h-[50vh] mx-auto w-full">
                                      <div id="transfer-qr-reader" className="w-full h-full"></div>
                                      <button 
