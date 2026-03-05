@@ -838,19 +838,21 @@ export const PickerInterface: React.FC<{
                  )}
 
                  <div className="flex gap-2">
-                    <button 
-                        onClick={() => { 
-                            if (initialMode === 'transfers' && onExit) {
-                                onExit();
-                            } else {
-                                setIsSetupOpen(true); 
-                                setIsTransferMode(false); 
-                            }
-                        }} 
-                        className="bg-white dark:bg-gray-800 p-2 rounded-lg border border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 shadow-lg text-[#4fc3f7] transition-colors"
-                    >
-                        <Home size={24} />
-                    </button>
+                    {!isTransferMode && (
+                        <button 
+                            onClick={() => { 
+                                if (initialMode === 'transfers' && onExit) {
+                                    onExit();
+                                } else {
+                                    setIsSetupOpen(true); 
+                                    setIsTransferMode(false); 
+                                }
+                            }} 
+                            className="bg-white dark:bg-gray-800 p-2 rounded-lg border border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 shadow-lg text-[#4fc3f7] transition-colors"
+                        >
+                            <Home size={24} />
+                        </button>
+                    )}
                     {!isSetupOpen && !isTransferMode && (
                         <>
                             <button onClick={loadCloudData} className="bg-white dark:bg-gray-800 p-2 rounded-lg border border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 shadow-lg text-gray-700 dark:text-white transition-colors">
@@ -861,7 +863,7 @@ export const PickerInterface: React.FC<{
                  </div>
              </div>
              
-             {!isSetupOpen && (
+             {!isSetupOpen && !isTransferMode && (
                 <div className="bg-white/80 dark:bg-black/60 backdrop-blur px-4 py-2 rounded border border-gray-200 dark:border-white/10 shadow-lg pointer-events-auto max-w-xs truncate transition-colors">
                     <div className="text-xs text-gray-500 dark:text-gray-400 uppercase font-bold text-center">Pedido Atual</div>
                     <h2 className="font-bold text-lg text-center text-[#ffeb3b]">{currentOrderName || "..."}</h2>
@@ -872,6 +874,14 @@ export const PickerInterface: React.FC<{
         {/* TRANSFER MODE UI */}
         {isTransferMode && (
              <div className="absolute inset-x-0 bottom-0 top-[60px] z-30 pointer-events-none flex flex-col justify-end">
+                 {/* Back Button */}
+                 <button 
+                     onClick={onExit}
+                     className="absolute top-4 left-4 bg-white/90 dark:bg-gray-900/90 backdrop-blur p-3 rounded-full shadow-lg border border-gray-200 dark:border-gray-700 pointer-events-auto text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-colors"
+                 >
+                     <ArrowLeft size={20} />
+                 </button>
+
                  {/* Top Info Bar */}
                  <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-white/90 dark:bg-gray-900/90 backdrop-blur px-6 py-2 rounded-full shadow-lg border border-purple-500/30 pointer-events-auto">
                      <div className="flex items-center gap-2 text-purple-600 dark:text-purple-400 font-bold">
@@ -1286,6 +1296,14 @@ export const PickerInterface: React.FC<{
         {isSetupOpen && (
             <div className="absolute inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
                  <div className="bg-white dark:bg-[#141923] border border-gray-200 dark:border-[#37474f] rounded-2xl w-full max-w-md p-6 shadow-2xl flex flex-col max-h-[90vh] relative transition-colors">
+                     <button 
+                        onClick={onExit}
+                        className="absolute top-4 left-4 text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white p-2 bg-gray-100 dark:bg-[#263238] rounded-full transition-colors z-10 flex items-center gap-2"
+                        title="Voltar ao Menu"
+                     >
+                         <ArrowLeft size={20} />
+                     </button>
+
                      {pickingTasks.length > 0 && (
                          <button 
                             onClick={() => setIsSetupOpen(false)}
@@ -1297,8 +1315,8 @@ export const PickerInterface: React.FC<{
 
                      {/* CLOUD MODE VIEW */}
                      <>
-                         <div className="flex-shrink-0 mb-4 flex justify-between items-end">
-                             <div className="text-xs text-gray-500 uppercase font-bold tracking-wider">Pedidos Cloud</div>
+                         <div className="flex-shrink-0 mb-4 mt-10 flex justify-between items-end">
+                             <div className="text-xs text-gray-500 uppercase font-bold tracking-wider">Pedidos Abertos</div>
                              <button 
                                 onClick={loadCloudData} 
                                 disabled={isRefreshing}

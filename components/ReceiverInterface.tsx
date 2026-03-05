@@ -402,7 +402,7 @@ export const ReceiverInterface: React.FC<ReceiverInterfaceProps> = ({ onBack, us
                 {showImagePreview && <ImagePreviewModal />}
 
                 <button onClick={onBack} className="text-gray-400 flex items-center gap-2 mb-6 font-bold hover:text-white transition-colors">
-                    <X size={20} /> Cancelar Entrada
+                    <ArrowLeft size={20} /> Voltar
                 </button>
 
                 <h1 className="text-2xl font-bold mb-6 text-[#4fc3f7] flex items-center gap-2">
