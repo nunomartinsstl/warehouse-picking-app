@@ -972,6 +972,17 @@ export const PickerInterface: React.FC<{
                                      >
                                          Confirmar Posição
                                      </button>
+
+                                     <button 
+                                         onClick={() => {
+                                             setTempBinCode('');
+                                             setTransferScannerOpen(true);
+                                         }}
+                                         className="w-full bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 py-3 rounded-xl font-bold transition-all mt-2 flex items-center justify-center gap-2"
+                                     >
+                                         <QrCode size={20} />
+                                         Ler Novamente
+                                     </button>
                                  </>
                              )}
                          </div>
