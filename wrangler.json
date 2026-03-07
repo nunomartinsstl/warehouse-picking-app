@@ -1,5 +1,5 @@
 {
-  "name": "warehouse-picker",
+  "name": "warehouse-picking-app",
   "compatibility_date": "2025-02-14",
   "assets": {
     "directory": "./dist"
