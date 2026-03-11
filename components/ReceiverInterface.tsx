@@ -1,8 +1,8 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Camera, ArrowRight, Save, Trash2, CheckCircle, X, FileText, Loader2, MapPin, Box, Crop as CropIcon, ZoomIn, ArrowLeft, History, QrCode } from 'lucide-react';
+import { Camera, ArrowRight, Save, Trash2, CheckCircle, X, FileText, Loader2, Box, Crop as CropIcon, ZoomIn, ArrowLeft, History, QrCode } from 'lucide-react';
 import ReactCrop, { Crop, PixelCrop, centerCrop, makeAspectCrop } from 'react-image-crop';
 import { Html5Qrcode } from 'html5-qrcode';
-import { StockItem, ReceiptItem, User } from '../types';
+import { StockItem, ReceiptItem, User, ReceiptPedido } from '../types';
 import { fetchStockFromCloud, submitReceipt, auth } from '../utils/firebase';
 
 interface ReceiverInterfaceProps {
@@ -16,6 +16,7 @@ export const ReceiverInterface: React.FC<ReceiverInterfaceProps> = ({ onBack, us
     // State
     const [stage, setStage] = useState<Stage>('setup');
     const [poNumber, setPoNumber] = useState('');
+    const [description, setDescription] = useState('');
     const [documentImage, setDocumentImage] = useState<string>(''); // Base64
     const [showImagePreview, setShowImagePreview] = useState(false);
     const [tempImageSrc, setTempImageSrc] = useState<string>('');
@@ -29,6 +30,7 @@ export const ReceiverInterface: React.FC<ReceiverInterfaceProps> = ({ onBack, us
 
     // Receipt Data
     const [scannedItems, setScannedItems] = useState<ReceiptItem[]>([]);
+    const [pedidos, setPedidos] = useState<ReceiptPedido[]>([]);
     
     // Crop State
     const [crop, setCrop] = useState<Crop>();
@@ -74,11 +76,18 @@ export const ReceiverInterface: React.FC<ReceiverInterfaceProps> = ({ onBack, us
     useEffect(() => {
         const savedPO = localStorage.getItem('setling_draft_po');
         if (savedPO && !poNumber) setPoNumber(savedPO);
+        
+        const savedDesc = localStorage.getItem('setling_draft_desc');
+        if (savedDesc && !description) setDescription(savedDesc);
     }, []);
 
     useEffect(() => {
         localStorage.setItem('setling_draft_po', poNumber);
     }, [poNumber]);
+
+    useEffect(() => {
+        localStorage.setItem('setling_draft_desc', description);
+    }, [description]);
 
     // --- IMAGE UTILS ---
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -296,27 +305,38 @@ export const ReceiverInterface: React.FC<ReceiverInterfaceProps> = ({ onBack, us
     };
 
     const handleFinalConfirm = async () => {
-        if (scannedItems.length === 0) return;
+        if (scannedItems.length === 0 && pedidos.length === 0) return;
         
+        const currentPedido: ReceiptPedido | null = scannedItems.length > 0 ? {
+            id: pedidos.length + 1,
+            poNumber: poNumber || 'N/A',
+            description: description || '',
+            documentImage,
+            items: scannedItems
+        } : null;
+
+        const allPedidos = currentPedido ? [...pedidos, currentPedido] : pedidos;
+
         // Use username if available, otherwise email, otherwise uid, otherwise 'unknown'
         const userIdToSubmit = user?.username || user?.email || auth.currentUser?.uid || 'unknown';
 
         setIsSaving(true);
         try {
             await submitReceipt({
-                poNumber: poNumber || 'N/A',
-                documentImage,
-                items: scannedItems,
                 date: new Date().toISOString(),
-                userId: userIdToSubmit
+                userId: userIdToSubmit,
+                pedidos: allPedidos
             });
             
             alert("Receção registada com sucesso!");
             
             // Reset
+            setPedidos([]);
             setScannedItems([]);
             setPoNumber('');
+            setDescription('');
             localStorage.removeItem('setling_draft_po');
+            localStorage.removeItem('setling_draft_desc');
             setDocumentImage('');
             setStage('setup');
         } catch (error) {
@@ -325,6 +345,26 @@ export const ReceiverInterface: React.FC<ReceiverInterfaceProps> = ({ onBack, us
         } finally {
             setIsSaving(false);
         }
+    };
+
+    const handleNewPedido = () => {
+        if (scannedItems.length === 0) {
+            alert("Adicione pelo menos um item antes de iniciar um novo pedido.");
+            return;
+        }
+        const newPedido: ReceiptPedido = {
+            id: pedidos.length + 1,
+            poNumber: poNumber || 'N/A',
+            description: description || '',
+            documentImage,
+            items: scannedItems
+        };
+        setPedidos([...pedidos, newPedido]);
+        setScannedItems([]);
+        setPoNumber('');
+        setDescription('');
+        setDocumentImage('');
+        setStage('setup');
     };
 
     // --- RENDER ---
@@ -418,6 +458,16 @@ export const ReceiverInterface: React.FC<ReceiverInterfaceProps> = ({ onBack, us
                             onChange={(e) => setPoNumber(e.target.value)}
                             placeholder="Ex: PO-2023-999"
                             className={`w-full bg-gray-800 border rounded-xl p-4 text-white placeholder-gray-600 focus:outline-none transition-colors ${!poNumber && documentImage ? 'border-red-500/50' : 'border-gray-700 focus:border-[#4fc3f7]'}`}
+                        />
+                    </div>
+
+                    <div>
+                        <label className="block text-gray-400 text-xs uppercase font-bold mb-2">Descrição <span className="text-gray-500 font-normal">(Opcional)</span></label>
+                        <textarea 
+                            value={description}
+                            onChange={(e) => setDescription(e.target.value)}
+                            placeholder="Adicione uma nota ou descrição..."
+                            className="w-full bg-gray-800 border border-gray-700 rounded-xl p-4 text-white placeholder-gray-600 focus:outline-none focus:border-[#4fc3f7] transition-colors resize-none h-24"
                         />
                     </div>
 
@@ -523,21 +573,22 @@ export const ReceiverInterface: React.FC<ReceiverInterfaceProps> = ({ onBack, us
                 </button>
 
                 <div className="flex-1 flex flex-col justify-center items-center max-w-md mx-auto w-full">
-                    <div className="bg-gray-800 p-4 rounded-full mb-6 border border-gray-700">
-                        <MapPin size={48} className="text-[#4fc3f7]" />
-                    </div>
-                    
                     <h2 className="text-2xl font-bold mb-4 text-center">Indique a Posição</h2>
                     <p className="text-gray-400 text-center mb-8 px-4">
                         Digitalize o código QR da localização onde vai colocar o material.
                     </p>
 
-                    <button 
-                        onClick={() => setStage('scanning')}
-                        className="w-full bg-[#4fc3f7] hover:bg-[#29b6f6] text-black font-bold py-6 rounded-xl flex justify-center items-center gap-3 transition-all shadow-lg text-lg"
-                    >
-                        <QrCode size={28} /> Ler Código QR
-                    </button>
+                    <div className="flex flex-col items-center justify-center py-6 gap-3">
+                        <button 
+                            onClick={() => setStage('scanning')}
+                            className="bg-purple-100 dark:bg-purple-900/20 p-5 rounded-full animate-pulse shadow-[0_0_20px_rgba(168,85,247,0.5)] hover:shadow-[0_0_40px_rgba(168,85,247,0.8)] transition-all duration-300 group cursor-pointer"
+                        >
+                            <QrCode size={56} className="text-purple-600 dark:text-purple-400 group-hover:scale-110 transition-transform" />
+                        </button>
+                        <p className="text-gray-500 dark:text-gray-400 text-center max-w-[200px] text-xs">
+                            Toque no ícone para ler o código QR da posição de <span className="font-bold text-purple-600 dark:text-purple-400">destino</span>.
+                        </p>
+                    </div>
                 </div>
 
                 {/* SUGGESTION MODAL OVERLAY */}
@@ -651,76 +702,125 @@ export const ReceiverInterface: React.FC<ReceiverInterfaceProps> = ({ onBack, us
     if (stage === 'summary') {
         return (
             <div className="flex flex-col h-full bg-gray-900 text-white p-4">
-                <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
-                    <FileText className="text-[#00e676]" /> Resumo da Entrada
+                <h2 className="text-xl font-bold mb-4 flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                        <FileText className="text-[#00e676]" /> Resumo da Entrada
+                    </div>
+                    {pedidos.length > 0 && (
+                        <span className="text-xs bg-gray-800 px-2 py-1 rounded-full text-gray-400 border border-gray-700">
+                            Sessão: {pedidos.length} {pedidos.length === 1 ? 'pedido' : 'pedidos'}
+                        </span>
+                    )}
                 </h2>
                 
-                <div className="flex-1 overflow-y-auto bg-gray-800 rounded-xl border border-gray-700 p-2 mb-4 shadow-inner">
-                    {scannedItems.length === 0 ? (
-                        <div className="h-full flex items-center justify-center text-gray-500">Nenhum item registado.</div>
-                    ) : (
-                        <table className="w-full text-left text-sm">
-                            <thead className="text-gray-500 uppercase font-bold border-b border-gray-700">
-                                <tr>
-                                    <th className="p-2">Posição</th>
-                                    <th className="p-2">Material</th>
-                                    <th className="p-2 text-center">Qtd</th>
-                                    <th className="p-2"></th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-gray-700">
-                                {scannedItems.map((item) => (
-                                    <tr key={item.id} className="hover:bg-gray-700/30">
-                                        <td className="p-2 font-mono text-[#4fc3f7] text-xs">{item.bin}</td>
-                                        <td className="p-2">
-                                            <input 
-                                                className="bg-transparent border-b border-gray-600 w-full focus:outline-none focus:border-[#4fc3f7]"
-                                                value={item.material}
-                                                onChange={(e) => handleUpdateItem(item.id, 'material', e.target.value)}
-                                            />
-                                        </td>
-                                        <td className="p-2">
-                                            <input 
-                                                type="number"
-                                                className="bg-transparent border-b border-gray-600 w-16 text-center focus:outline-none focus:border-[#00e676]"
-                                                value={item.qty}
-                                                onChange={(e) => handleUpdateItem(item.id, 'qty', e.target.value)}
-                                            />
-                                        </td>
-                                        <td className="p-2 text-right">
-                                            <button onClick={() => handleDeleteItem(item.id)} className="text-red-400 p-1">
-                                                <Trash2 size={16} />
-                                            </button>
-                                        </td>
+                <div className="flex-1 overflow-y-auto space-y-4 mb-4">
+                    {pedidos.map((pedido, index) => (
+                        <div key={pedido.id} className="bg-gray-800 rounded-xl border border-gray-700 p-3 shadow-inner">
+                            <div className="flex justify-between items-center mb-2 border-b border-gray-700 pb-2">
+                                <span className="font-bold text-purple-400">Pedido #{index + 1}</span>
+                                <span className="text-xs text-gray-400">PO: {pedido.poNumber}</span>
+                            </div>
+                            <table className="w-full text-left text-sm">
+                                <thead className="text-gray-500 uppercase font-bold">
+                                    <tr>
+                                        <th className="p-1">Posição</th>
+                                        <th className="p-1">Material</th>
+                                        <th className="p-1 text-center">Qtd</th>
                                     </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    )}
+                                </thead>
+                                <tbody className="divide-y divide-gray-700/50">
+                                    {pedido.items.map((item) => (
+                                        <tr key={item.id}>
+                                            <td className="p-1 font-mono text-[#4fc3f7] text-xs">{item.bin}</td>
+                                            <td className="p-1">{item.material}</td>
+                                            <td className="p-1 text-center">{item.qty}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    ))}
+
+                    <div className="bg-gray-800 rounded-xl border border-gray-700 p-2 shadow-inner">
+                        <div className="flex justify-between items-center mb-2 border-b border-gray-700 pb-2 px-2 pt-1">
+                            <span className="font-bold text-[#00e676]">Pedido Atual</span>
+                            <span className="text-xs text-gray-400">PO: {poNumber || 'N/A'}</span>
+                        </div>
+                        {scannedItems.length === 0 ? (
+                            <div className="py-8 flex items-center justify-center text-gray-500">Nenhum item registado.</div>
+                        ) : (
+                            <table className="w-full text-left text-sm">
+                                <thead className="text-gray-500 uppercase font-bold border-b border-gray-700">
+                                    <tr>
+                                        <th className="p-2">Posição</th>
+                                        <th className="p-2">Material</th>
+                                        <th className="p-2 text-center">Qtd</th>
+                                        <th className="p-2"></th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-700">
+                                    {scannedItems.map((item) => (
+                                        <tr key={item.id} className="hover:bg-gray-700/30">
+                                            <td className="p-2 font-mono text-[#4fc3f7] text-xs">{item.bin}</td>
+                                            <td className="p-2">
+                                                <input 
+                                                    className="bg-transparent border-b border-gray-600 w-full focus:outline-none focus:border-[#4fc3f7]"
+                                                    value={item.material}
+                                                    onChange={(e) => handleUpdateItem(item.id, 'material', e.target.value)}
+                                                />
+                                            </td>
+                                            <td className="p-2">
+                                                <input 
+                                                    type="number"
+                                                    className="bg-transparent border-b border-gray-600 w-16 text-center focus:outline-none focus:border-[#00e676]"
+                                                    value={item.qty}
+                                                    onChange={(e) => handleUpdateItem(item.id, 'qty', e.target.value)}
+                                                />
+                                            </td>
+                                            <td className="p-2 text-right">
+                                                <button onClick={() => handleDeleteItem(item.id)} className="text-red-400 p-1">
+                                                    <Trash2 size={16} />
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        )}
+                    </div>
                 </div>
 
                 <div className="space-y-3">
-                    <button 
-                        onClick={() => { setStage('location_input'); }}
-                        className="w-full bg-gray-800 hover:bg-gray-700 border border-dashed border-gray-600 text-gray-300 py-3 rounded-xl flex justify-center items-center gap-2 transition-colors"
-                    >
-                        <Box size={18} /> Adicionar Mais Itens
-                    </button>
+                    <div className="flex gap-3">
+                        <button 
+                            onClick={() => { setStage('location_input'); }}
+                            className="flex-1 bg-gray-800 hover:bg-gray-700 border border-dashed border-gray-600 text-gray-300 py-3 rounded-xl flex justify-center items-center gap-2 transition-colors"
+                        >
+                            <Box size={18} /> Adicionar Itens
+                        </button>
+                        <button 
+                            onClick={handleNewPedido}
+                            disabled={scannedItems.length === 0}
+                            className="flex-1 bg-purple-900/30 hover:bg-purple-900/50 text-purple-400 border border-purple-900/50 py-3 rounded-xl flex justify-center items-center gap-2 transition-colors disabled:opacity-50"
+                        >
+                            <FileText size={18} /> Novo Pedido
+                        </button>
+                    </div>
 
                     <div className="flex gap-3">
                         <button 
-                            onClick={() => { if(confirm("Cancelar entrada?")) { setStage('setup'); setScannedItems([]); } }}
+                            onClick={() => { if(confirm("Cancelar entrada?")) { setStage('setup'); setScannedItems([]); setPedidos([]); } }}
                             className="flex-1 bg-red-900/30 hover:bg-red-900/50 text-red-400 border border-red-900/50 py-4 rounded-xl font-bold transition-colors"
                         >
                             Cancelar
                         </button>
                         <button 
                             onClick={handleFinalConfirm}
-                            disabled={isSaving || scannedItems.length === 0}
-                            className="flex-1 bg-[#00e676] hover:bg-[#00c853] text-black font-bold py-4 rounded-xl flex justify-center items-center gap-2 shadow-lg disabled:opacity-50 transition-all"
+                            disabled={isSaving || (scannedItems.length === 0 && pedidos.length === 0)}
+                            className="flex-[2] bg-[#00e676] hover:bg-[#00c853] text-black font-bold py-4 rounded-xl flex justify-center items-center gap-2 shadow-lg disabled:opacity-50 transition-all"
                         >
                             {isSaving ? <Loader2 className="animate-spin" /> : <Save size={20} />} 
-                            Confirmar
+                            Confirmar Sessão
                         </button>
                     </div>
                 </div>

@@ -129,6 +129,20 @@ export interface ReceiptItem {
     qty: number;
 }
 
+export interface ReceiptPedido {
+    id: number;
+    poNumber: string;
+    description?: string;
+    documentImage: string;
+    items: ReceiptItem[];
+}
+
+export interface ReceiptSessionData {
+    date: string;
+    userId: string;
+    pedidos: ReceiptPedido[];
+}
+
 export interface ReceiptData {
     poNumber: string;
     documentImage: string; // Base64 JPEG
