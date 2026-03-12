@@ -100,10 +100,11 @@ export const ReceiverInterface: React.FC<ReceiverInterfaceProps> = ({ onBack, us
             });
             reader.readAsDataURL(file);
         }
+        e.target.value = '';
     };
 
     const onImageLoad = (e: React.SyntheticEvent<HTMLImageElement>) => {
-        const { width, height, naturalWidth, naturalHeight } = e.currentTarget;
+        const { width, height } = e.currentTarget;
         const crop = centerCrop(
             makeAspectCrop(
                 { unit: '%', width: 80 },
@@ -116,10 +117,10 @@ export const ReceiverInterface: React.FC<ReceiverInterfaceProps> = ({ onBack, us
         );
         setCrop(crop);
         setCompletedCrop({
-            x: (crop.x / 100) * naturalWidth,
-            y: (crop.y / 100) * naturalHeight,
-            width: (crop.width / 100) * naturalWidth,
-            height: (crop.height / 100) * naturalHeight,
+            x: (crop.x / 100) * width,
+            y: (crop.y / 100) * height,
+            width: (crop.width / 100) * width,
+            height: (crop.height / 100) * height,
             unit: 'px'
         });
     };
