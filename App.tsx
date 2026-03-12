@@ -326,7 +326,7 @@ const App: React.FC = () => {
 
   // --- APP LAYOUT ---
   return (
-      <div className="relative w-full h-full bg-gray-900 text-white transition-colors">
+      <div className="relative w-full h-[100dvh] bg-gray-900 text-white transition-colors">
           {/* Header Buttons (Absolute top-right for quick access in development/prod) */}
           <div className="fixed top-4 right-4 z-[100] flex items-center gap-3">
               {selectedCompany && (
